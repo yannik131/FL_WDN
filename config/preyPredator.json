@@ -1,0 +1,110 @@
+{
+    "config": {
+        "cellMembraneType": {
+            "discCount": 1000,
+            "discTypeDistribution": {
+                "Resource": 1.0
+            },
+            "name": "Cell membrane",
+            "permeabilityMap": {},
+            "radius": 200.0
+        },
+        "discTypes": [
+            {
+                "mass": 1.0,
+                "name": "Resource",
+                "radius": 2.0
+            },
+            {
+                "mass": 1.0,
+                "name": "Prey",
+                "radius": 5.0
+            },
+            {
+                "mass": 1.0,
+                "name": "Predator",
+                "radius": 5.0
+            }
+        ],
+        "discs": [],
+        "membraneTypes": [],
+        "membranes": [],
+        "mostProbableSpeed": 200.0,
+        "reactions": [
+            {
+                "educt1": "Prey",
+                "educt2": "Predator",
+                "probability": 0.02,
+                "product1": "Predator",
+                "product2": "Predator"
+            },
+            {
+                "educt1": "Prey",
+                "educt2": "Resource",
+                "probability": 0.05,
+                "product1": "Prey",
+                "product2": "Prey"
+            },
+            {
+                "educt1": "Prey",
+                "educt2": "",
+                "probability": 0.05,
+                "product1": "Resource",
+                "product2": ""
+            },
+            {
+                "educt1": "Predator",
+                "educt2": "",
+                "probability": 0.9,
+                "product1": "Resource",
+                "product2": ""
+            },
+            {
+                "educt1": "Resource",
+                "educt2": "",
+                "probability": 0.01,
+                "product1": "Prey",
+                "product2": ""
+            },
+            {
+                "educt1": "Resource",
+                "educt2": "",
+                "probability": 0.01,
+                "product1": "Predator",
+                "product2": ""
+            }
+        ],
+        "simulationTimeScale": 0.3,
+        "simulationTimeStep": 0.003,
+        "useDistribution": true
+    },
+    "configVersion": "1",
+    "discTypeColorMap": {
+        "Predator": [
+            255,
+            0,
+            0,
+            255
+        ],
+        "Prey": [
+            0,
+            255,
+            0,
+            255
+        ],
+        "Resource": [
+            0,
+            0,
+            255,
+            255
+        ]
+    },
+    "membraneTypeColorMap": {
+        "Cell membrane": [
+            255,
+            255,
+            0,
+            255
+        ]
+    }
+}

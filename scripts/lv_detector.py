@@ -1,51 +1,110 @@
-import pandas as pd 
-import numpy as np 
-from pathlib import Path 
-import matplotlib.pyplot as plt 
-from scipy.signal import savgol_filter, find_peaks, correlate, correlation_lags
+import pandas as pd
+import numpy as np
+from pathlib import Path
+import matplotlib.pyplot as plt
+from scipy.signal import savgol_filter
+from scipy.integrate import solve_ivp
 
-HERE = Path(__file__).resolve().parent 
+HERE = Path(__file__).resolve().parent
 
-df = pd.read_csv(HERE / "../datasets/example/bad.csv")
-t, prey, predator = df["ElapsedTime[s]"], df['Prey'], df['Predator']
+df = pd.read_csv(HERE / "../datasets/example/good.csv")
+t = df["ElapsedTime[s]"].values
+x = df["Prey"].values
+y = df["Predator"].values
 
-fig, axes = plt.subplots(2, 1)
-df.drop(columns=["Resource"]).plot(x="ElapsedTime[s]", ax=axes[0])
+# --- smoothing ---
+dt = np.mean(np.diff(t))
+win = int(0.02 * len(t)) | 1
+x_s = savgol_filter(x, win, 3)
+y_s = savgol_filter(y, win, 3)
 
-dt = 0.003
-T = 60.0
-total = 1000.0
+# --- derivatives ---
+dx = np.gradient(x_s, dt)
+dy = np.gradient(y_s, dt)
 
-W = int(T / dt * 0.02) | 1
-prom = 0.05 * total
+eps = 1e-8
+x_safe = np.maximum(x_s, eps)
+y_safe = np.maximum(y_s, eps)
 
-prey = savgol_filter(prey, W, 3)
-predator = savgol_filter(predator, W, 3)
+# --- fit LV parameters (linear regression form) ---
+A = np.column_stack([x_safe, -x_safe * y_safe])
+α, β = np.linalg.lstsq(A, dx, rcond=None)[0]
 
-px, _ = find_peaks(prey, prominence=0.01*prey.max())
-py, _ = find_peaks(predator, prominence=0.01*predator.max())
+B = np.column_stack([x_safe * y_safe, -y_safe])
+δ, γ = np.linalg.lstsq(B, dy, rcond=None)[0]
 
-distances = []
-unique_predator_peaks = set()
+# --- stability fix: clip parameters ---
+α, β, γ, δ = np.clip([α, β, γ, δ], -5.0, 5.0)
 
-for p in px:
-    nearest_predator_peak = py[np.argmin(np.abs(p - py))]
-    unique_predator_peaks.add(nearest_predator_peak)
-    distances.append(t.iloc[nearest_predator_peak] - t.iloc[p])
-    print(f"Prey peak at {t.iloc[p]}, {prey[p]}: Nearest predator peak at {t.iloc[nearest_predator_peak]}, {predator[nearest_predator_peak]}")
+# --- LV model ---
+def lv(t, z):
+    x, y = z
+    return [
+        α * x - β * x * y,
+        δ * x * y - γ * y
+    ]
 
-median = np.median(distances)
-print(median)
-print(f"{int(len(unique_predator_peaks) / len(px) * 100.0)}% match")
+z0 = [x_s[0], y_s[0]]
 
-for x in t.iloc[px]:
-    axes[1].axvline(x, color="green", linestyle="--", alpha=0.5)
+# --- solve with stiff-capable solver + safety controls ---
+sol = solve_ivp(
+    lv,
+    (t[0], t[-1]),
+    z0,
+    t_eval=t,
+    method="LSODA",
+    rtol=1e-5,
+    atol=1e-7,
+    max_step=dt * 5
+)
 
-for x in t.iloc[py]:
-    axes[1].axvline(x, color="red", linestyle="--", alpha=0.5)
+if (not sol.success) or np.any(~np.isfinite(sol.y)):
+    print("NO (integration failed)")
+    exit()
 
-axes[1].plot(t, prey, label="prey", color="green")
-axes[1].plot(t, predator, label="predator", color="red")
+x_hat, y_hat = sol.y
 
-plt.legend()
+# --- error metric ---
+err = np.mean((x_s - x_hat)**2 + (y_s - y_hat)**2)
+scale = np.mean(x_s**2 + y_s**2)
+rel_err = err / (scale + eps)
+
+THRESHOLD = 0.05
+is_lv = rel_err < THRESHOLD
+
+print("alpha, beta, gamma, delta =", (α, β, γ, δ))
+print("relative error =", rel_err)
+print("YES (LV dynamics)" if is_lv else "NO (not LV dynamics)")
+
+# =======================
+# PLOTS
+# =======================
+
+fig, axes = plt.subplots(3, 1, figsize=(10, 12))
+
+# --- original data ---
+axes[0].plot(t, x, alpha=0.3, color="green", label="prey raw")
+axes[0].plot(t, y, alpha=0.3, color="red", label="predator raw")
+axes[0].plot(t, x_s, color="green", label="prey smooth")
+axes[0].plot(t, y_s, color="red", label="predator smooth")
+axes[0].set_title("Original data")
+axes[0].legend()
+
+# --- fit vs data ---
+axes[1].plot(t, x_s, color="green", label="prey data")
+axes[1].plot(t, y_s, color="red", label="predator data")
+axes[1].plot(t, x_hat, "--", color="green", label="prey LV fit")
+axes[1].plot(t, y_hat, "--", color="red", label="predator LV fit")
+axes[1].set_title("Lotka–Volterra fit")
+axes[1].legend()
+
+# --- phase space ---
+axes[2].plot(x_s, y_s, color="black", label="data")
+axes[2].plot(x_hat, y_hat, "--", color="blue", label="LV model")
+axes[2].set_title("Phase space")
+axes[2].set_xlabel("Prey")
+axes[2].set_ylabel("Predator")
+axes[2].legend()
+
+plt.tight_layout()
 plt.show()
