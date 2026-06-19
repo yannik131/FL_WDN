@@ -2,11 +2,12 @@ import subprocess
 from pathlib import Path
 
 script_dir = Path(__file__).resolve().parent
+exe_dir = script_dir.parent / "bin/cell-cli.exe"
 subprocess.run(
     [
-        "../bin/cell-cli.exe",
+        exe_dir,
         "--config=../config/preyPredator.json",
-        "--out=../datasets/example/bad.csv",
+        "--out=../datasets/example/medium.csv",
         "--duration=60",
         "--storage-interval=0.003",
     ],
