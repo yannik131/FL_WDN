@@ -4,3 +4,4 @@
 *.jpeg filter=lfs diff=lfs merge=lfs -text
 *.png filter=lfs diff=lfs merge=lfs -text
 *.exe filter=lfs diff=lfs merge=lfs -text
+bin/cell-cli filter=lfs diff=lfs merge=lfs -text
