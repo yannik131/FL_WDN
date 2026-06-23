@@ -6,11 +6,11 @@ import numpy as np
 
 fig, axes = plt.subplots(3, 1, sharex=True, sharey=True)
 
-HERE = Path(__file__).parent 
+HERE = Path(__file__).parent
 
 for ax, filename in zip(axes, ["bad.csv", "medium.csv", "good.csv"]):
     print(filename)
-    df = pd.read_csv(HERE / "../datasets/example" / filename)
+    df = pd.read_csv(HERE / "../datasets/FL/example" / filename)
     df = df.drop(columns=['Resource'])
     W = 500
     t, prey, predator = df['ElapsedTime[s]'], savgol_filter(df['Prey'], W, 3), savgol_filter(df['Predator'], W, 3)
@@ -42,27 +42,27 @@ for ax, filename in zip(axes, ["bad.csv", "medium.csv", "good.csv"]):
 
     nearest_peaks = np.array(nearest_peaks)
 
-    delays = nearest_peaks - prey_t 
+    delays = nearest_peaks - prey_t
     cond_lag = np.median(delays) > 0
     print(f"Median lag = {np.median(delays)}: {'OK' if cond_lag else 'NOT OK'}")
 
     prey_periods = np.diff(prey_t)
     predator_periods = np.diff(predator_t)
 
-    prey_T = np.mean(prey_periods) if len(prey_periods) else np.nan 
+    prey_T = np.mean(prey_periods) if len(prey_periods) else np.nan
     predator_T = np.mean(predator_periods) if len(predator_periods) else np.nan
 
     def check_periods(peaks, T):
         if len(peaks) < 2:
-            return False 
+            return False
         print(f"{np.abs(np.diff(peaks))} -> {T}")
         return np.all(np.abs(np.diff(peaks) - T) <= 0.5 * T)
-    
+
     cond_preys = check_periods(prey_t, prey_T)
     cond_preds = check_periods(predator_t, predator_T)
 
-    ok = cond_pairs and cond_lag and cond_preds 
-    
+    ok = cond_pairs and cond_lag and cond_preds
+
     ax.set_title(f"{filename}: {'YES' if ok else 'NO'}")
 
 plt.tight_layout()
