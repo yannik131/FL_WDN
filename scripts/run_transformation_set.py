@@ -5,24 +5,24 @@ from pathlib import Path
 from tqdm import tqdm
 import numpy as np
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from bin_selector import get_binary_path
 import os
 
 script_dir = Path(__file__).resolve().parent
-exe = script_dir.parent / "bin/cell-cli-linux"
+exe = get_binary_path()
 
 with open(script_dir / "../config/WDN/transformation_simple.json") as f:
     base_cfg = json.load(f)
 
 p_vals = np.linspace(0, 1, 101)
 tasks = [float(p) for p in p_vals]
-Path("../datasets/WDN/simple_transformation_set/").mkdir(parents=True, exist_ok=True)
+output_dir = script_dir / "../datasets/WDN/simple_transformation_set/"
+Path(output_dir).mkdir(parents=True, exist_ok=True)
 
 def run_sim(p):
     cfg = json.loads(json.dumps(base_cfg))  # cheap deep copy
-
     cfg["config"]["reactions"][0]["probability"] = p
-
-    out = f"../datasets/WDN/simple_transformation_set/{p:.2f}.csv"
+    out = f"{output_dir}/{p:.2f}.csv"
 
     if Path(out).exists():
         print(f"Skipping {out} since it exists")
@@ -41,9 +41,9 @@ def run_sim(p):
             "--storage-interval=0.003",
         ],
         cwd=script_dir,
+        check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-        check=True,
     )
 
     return out
