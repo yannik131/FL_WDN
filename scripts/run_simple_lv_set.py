@@ -6,60 +6,101 @@ from tqdm import tqdm
 import numpy as np
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import os
+from bin_selector import get_binary_path
+from collections import deque
 
 script_dir = Path(__file__).resolve().parent
-exe = script_dir.parent / "bin/cell-cli-linux"
+exe = get_binary_path()
 
 with open(script_dir / "../config/FL/preyPredator.json") as f:
     base_cfg = json.load(f)
 
+class Task:
+    def __init__(self, filename, p1, p2, r):
+        self.filename = filename
+        self.p1 = p1 
+        self.p2 = p2 
+        self.r = r
+
 p1_vals = np.linspace(0, 1, 101)
 p2_vals = np.linspace(0, 1, 101)
+repitition = list(range(4))
 
-tasks = [(float(p1), float(p2)) for p1 in p1_vals for p2 in p2_vals]
+i = 0
+tasks = []
+for p1 in p1_vals:
+    for p2 in p2_vals:
+        for r in repitition:
+            tasks.append(Task(f"lv_simple_{i:04d}.csv", p1, p2, r))
+            i += 1
+
+with open(script_dir / "../datasets/FL/simple_lv_set.txt", "w") as file:
+    file.write("Filename,p1,p2,repitition\n")
+    for task in tasks:
+        file.write(f"{task.filename},{task.p1},{task.p2},{task.r}\n")
+
+output_dir = script_dir / "../datasets/FL/simple_lv_set/"
+Path(output_dir).mkdir(parents=True, exist_ok=True)
 
 
-def run_sim(p1_p2):
-    p1, p2 = p1_p2
+def run_sim(task: Task):
+    cfg = json.loads(json.dumps(base_cfg))
 
-    cfg = json.loads(json.dumps(base_cfg))  # cheap deep copy
-
-    cfg["config"]["reactions"][0]["probability"] = p1
-    cfg["config"]["reactions"][1]["probability"] = p2
-
-    out = f"../datasets/FL/simple_lv_set/{p1:.2f}_{p2:.2f}.csv"
+    cfg["config"]["reactions"][0]["probability"] = task.p1
+    cfg["config"]["reactions"][1]["probability"] = task.p2
+    out = output_dir / task.filename
 
     if Path(out).exists():
-        print(f"Skipping {out} since it exists")
         return out
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
         json.dump(cfg, tmp)
         tmp_path = tmp.name
 
-    subprocess.run(
-        [
-            str(exe),
-            f"--config={tmp_path}",
-            f"--out={out}",
-            "--duration=60",
-            "--storage-interval=0.003",
-        ],
-        cwd=script_dir,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=True,
-    )
+    try:
+        subprocess.run(
+            [
+                str(exe),
+                f"--config={tmp_path}",
+                f"--out={out}",
+                "--duration=60",
+                "--storage-interval=0.003",
+            ],
+            cwd=script_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
 
     return out
 
 
 if __name__ == "__main__":
     workers = os.cpu_count()
+    queue_size = workers * 2
+    futures = deque()
+    print(f"Number of workers: {workers}")
 
-    with ProcessPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(run_sim, t) for t in tasks]
+    with ProcessPoolExecutor(max_workers=workers) as pool, tqdm(total=len(tasks)) as pbar:
+        try:
+            task_iter = iter(tasks)
+            for _ in range(queue_size):
+                try:
+                    futures.append(pool.submit(run_sim, next(task_iter)))
+                except StopIteration:
+                    break 
 
-        with tqdm(total=len(tasks)) as pbar:
-            for _ in as_completed(futures):
+            while futures:
+                done = next(as_completed(futures))
+                futures.remove(done)
                 pbar.update(1)
+
+                try:
+                    futures.append(pool.submit(run_sim, next(task_iter)))
+                except StopIteration:
+                    pass 
+        except KeyboardInterrupt:
+            print("Interrupt detected, waiting for tasks to finish...")
+            pool.shutdown(wait=False, cancel_futures=True)
