@@ -8,9 +8,9 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import os
 
 script_dir = Path(__file__).resolve().parent
-exe = script_dir.parent / "bin/cell-cli"
+exe = script_dir.parent / "bin/cell-cli-linux"
 
-with open(script_dir / "../config/Fl/preyPredator.json") as f:
+with open(script_dir / "../config/FL/preyPredator.json") as f:
     base_cfg = json.load(f)
 
 p1_vals = np.linspace(0, 1, 101)
@@ -28,6 +28,10 @@ def run_sim(p1_p2):
     cfg["config"]["reactions"][1]["probability"] = p2
 
     out = f"../datasets/FL/simple_lv_set/{p1:.2f}_{p2:.2f}.csv"
+
+    if Path(out).exists():
+        print(f"Skipping {out} since it exists")
+        return out
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
         json.dump(cfg, tmp)
