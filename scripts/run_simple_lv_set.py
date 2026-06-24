@@ -15,6 +15,9 @@ exe = get_binary_path()
 with open(script_dir / "../config/FL/preyPredator.json") as f:
     base_cfg = json.load(f)
 
+def fmt(x):
+    return f"{x:.2f}" if isinstance(x, float) else str(x)
+
 class Task:
     def __init__(self, filename, p1, p2, r):
         self.filename = filename
@@ -37,7 +40,7 @@ for p1 in p1_vals:
 with open(script_dir / "../datasets/FL/simple_lv_set.txt", "w") as file:
     file.write("Filename,p1,p2,repitition\n")
     for task in tasks:
-        file.write(f"{task.filename},{task.p1},{task.p2},{task.r}\n")
+        file.write(f"{task.filename},{fmt(task.p1)},{fmt(task.p2)},{task.r}\n")
 
 output_dir = script_dir / "../datasets/FL/simple_lv_set/"
 Path(output_dir).mkdir(parents=True, exist_ok=True)
