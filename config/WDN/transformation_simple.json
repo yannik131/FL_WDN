@@ -36,7 +36,7 @@
         ],
         "reactionsConserveArea": false,
         "simulationTimeScale": 1.0,
-        "simulationTimeStep": 0.003,
+        "simulationTimeStep": 3000000,
         "useDistribution": true
     },
     "configVersion": "1",
