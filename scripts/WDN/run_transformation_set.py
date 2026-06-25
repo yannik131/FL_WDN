@@ -5,13 +5,13 @@ from pathlib import Path
 from tqdm import tqdm
 from collections import deque
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from bin_selector import get_binary_path
+from ..bin_selector import get_binary_path
 import os
 
-script_dir = Path(__file__).resolve().parent
+root_dir = Path(__file__).resolve().parent.parent
 exe = get_binary_path()
 
-with open(script_dir / "../config/WDN/transformation_simple.json") as f:
+with open(root_dir / "config/WDN/transformation_simple.json") as f:
     base_cfg = json.load(f)
 
 def fmt(x):
@@ -39,12 +39,12 @@ for p in p_vals:
                 tasks.append(Task(f"transform_{i:04d}.csv", p, f, N, r))
                 i += 1
 
-with open(script_dir / "../datasets/WDN/simple_transformation_set.txt", "w") as file:
-    file.write("Filename,p,f,N,repitition\n")
+with open(root_dir / "datasets/WDN/simple_transformation_set.txt", "w") as file:
+    file.write("Filename,p,f,N,repetition\n")
     for task in tasks:
         file.write(f"{task.filename},{fmt(task.p)},{fmt(task.f)},{task.N},{task.r}\n")
 
-output_dir = script_dir / "../datasets/WDN/simple_transformation_set/"
+output_dir = root_dir / "datasets/WDN/simple_transformation_set/"
 Path(output_dir).mkdir(parents=True, exist_ok=True)
 
 def run_sim(task: Task):
@@ -71,7 +71,7 @@ def run_sim(task: Task):
                 "--duration=60",
                 "--storage-interval=0.003",
             ],
-            cwd=script_dir,
+            cwd=root_dir,
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

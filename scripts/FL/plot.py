@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from scipy.signal import savgol_filter, find_peaks
 import numpy as np
+from lv_classifier import has_lv_dynamics
 
 fig, axes = plt.subplots(3, 1, sharex=True, sharey=True)
 
@@ -14,11 +15,14 @@ for ax, filename in zip(axes, ["bad.csv", "medium.csv", "good.csv"]):
     df = df.drop(columns=['Resource'])
     W = 500
     t, prey, predator = df['ElapsedTime[s]'], savgol_filter(df['Prey'], W, 3), savgol_filter(df['Predator'], W, 3)
+    OK = has_lv_dynamics(df)
     ax.plot(df['ElapsedTime[s]'], prey, label='Prey', color='tab:green')
     ax.plot(df['ElapsedTime[s]'], predator, label='Predator', color='tab:red')
-    prey_peaks, _ = find_peaks(prey, prominence=0.05*np.median(prey), height=1.1*np.median(prey))
-    predator_peaks, _ = find_peaks(predator, prominence=0.05*np.median(predator), height=1.1*np.median(predator))
+
+    prey_peaks, _ = find_peaks(prey, prominence=50)
+    predator_peaks, _ = find_peaks(predator, prominence=50)
     df.plot(x="ElapsedTime[s]", ax=ax, color={'Prey': 'tab:green', 'Predator': 'tab:red'}, legend=True, alpha=0.3)
+
     ax.axhline(np.median(prey), color='green', linestyle='--', alpha=0.5)
     ax.axhline(np.median(predator), color='red', linestyle='--', alpha=0.5)
 
@@ -37,33 +41,7 @@ for ax, filename in zip(axes, ["bad.csv", "medium.csv", "good.csv"]):
         peak_pair_t.add(pt)
         peak_pair_t.add(predator_t[idx])
 
-    cond_pairs = len(peak_pair_t) >= 6
-    print(f"{len(peak_pair_t)} unique prey/predator peak x values: {'OK' if cond_pairs else 'NOT OK'}")
-
-    nearest_peaks = np.array(nearest_peaks)
-
-    delays = nearest_peaks - prey_t
-    cond_lag = np.median(delays) > 0
-    print(f"Median lag = {np.median(delays)}: {'OK' if cond_lag else 'NOT OK'}")
-
-    prey_periods = np.diff(prey_t)
-    predator_periods = np.diff(predator_t)
-
-    prey_T = np.mean(prey_periods) if len(prey_periods) else np.nan
-    predator_T = np.mean(predator_periods) if len(predator_periods) else np.nan
-
-    def check_periods(peaks, T):
-        if len(peaks) < 2:
-            return False
-        print(f"{np.abs(np.diff(peaks))} -> {T}")
-        return np.all(np.abs(np.diff(peaks) - T) <= 0.5 * T)
-
-    cond_preys = check_periods(prey_t, prey_T)
-    cond_preds = check_periods(predator_t, predator_T)
-
-    ok = cond_pairs and cond_lag and cond_preds
-
-    ax.set_title(f"{filename}: {'YES' if ok else 'NO'}")
+    ax.set_title(f"{filename}: {'YES' if OK else 'NO'}")
 
 plt.tight_layout()
 plt.show()

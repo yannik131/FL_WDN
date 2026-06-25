@@ -27,18 +27,18 @@ class Task:
 
 p1_vals = np.linspace(0, 1, 101)
 p2_vals = np.linspace(0, 1, 101)
-repitition = list(range(4))
+repetition = list(range(4))
 
 i = 0
 tasks = []
 for p1 in p1_vals:
     for p2 in p2_vals:
-        for r in repitition:
+        for r in repetition:
             tasks.append(Task(f"lv_simple_{i:04d}.csv", p1, p2, r))
             i += 1
 
 with open(script_dir / "../datasets/FL/simple_lv_set.txt", "w") as file:
-    file.write("Filename,p1,p2,repitition\n")
+    file.write("Filename,p1,p2,repetition\n")
     for task in tasks:
         file.write(f"{task.filename},{fmt(task.p1)},{fmt(task.p2)},{task.r}\n")
 
