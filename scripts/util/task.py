@@ -3,11 +3,11 @@ from pathlib import Path
 import tempfile
 import subprocess
 import copy
-from util.bin_selector import get_binary_path
 import os 
 from collections import deque
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
+from util.paths import get_binary_path
 
 EXE = get_binary_path()
 
