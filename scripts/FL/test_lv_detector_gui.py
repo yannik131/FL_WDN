@@ -15,7 +15,7 @@ FILES = ["bad.csv", "medium.csv", "good.csv"]
 
 
 def compute_and_plot(ax, filename, prominence):
-    df = pd.read_csv(HERE / "../datasets/FL/example" / filename)
+    df = pd.read_csv(HERE / "../../datasets/FL/example" / filename)
     df = df.drop(columns=["Resource"])
 
     W = 500
@@ -29,7 +29,7 @@ def compute_and_plot(ax, filename, prominence):
     ax.plot(t, predator, label="Predator", color="tab:red")
 
     prey_peaks, _ = find_peaks(prey, prominence=prominence)
-    predator_peaks, _ = find_peaks(predator, prominence=prominence)
+    predator_peaks, _ = find_peaks(predator, prominence=0.9*prominence)
 
     ax.axhline(np.median(prey), color="green", linestyle="--", alpha=0.5)
     ax.axhline(np.median(predator), color="red", linestyle="--", alpha=0.5)

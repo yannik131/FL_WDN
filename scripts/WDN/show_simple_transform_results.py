@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 
 ROOT_DIR = Path(__file__).parent.parent.parent
-RESULT_DIR = ROOT_DIR / "results/WDN/simple_transformation/ex2"
+RESULT_DIR = ROOT_DIR / "results/WDN/simple_transformation/ex1"
 
 files = list(RESULT_DIR.glob("*.csv"))
 

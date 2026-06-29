@@ -182,10 +182,10 @@ if __name__ == "__main__":
         bundle = train_model(X, y, group_ids)
         joblib.dump(bundle, MODEL_OUT)
 
-    A0 = 10000
+    A0 = 10
     B0 = 0
-    p = 0.05
-    pred = predict_series(bundle, A0=A0, B0=B0, p=p)
+    p = 0.01
+    pred = predict_series(bundle, A0=A0, B0=B0, p=p, round_counts=True)
     pred.to_csv(RESULT_OUT / f"pred_{A0}_{B0}_{p}.csv", index=False)
     pred.plot(x="ElapsedTime[s]")
     plt.title(f"Predicted, A0={A0}, B0={B0}, p={p}")
