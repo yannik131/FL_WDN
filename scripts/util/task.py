@@ -33,8 +33,6 @@ class Task:
         self.__apply_to_cfg(cfg)
         out = output_dir / self.filename
 
-        exit(0)
-
         if Path(out).exists():
             return out 
         
