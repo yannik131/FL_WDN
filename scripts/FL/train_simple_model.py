@@ -5,7 +5,7 @@ from sklearn.model_selection import GroupShuffleSplit
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPClassifier
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, brier_score_loss, log_loss
 import joblib
 
 df = pd.read_csv(DATASETS_DIR / "FL/lv_heat_map_simple_df.csv")
@@ -36,6 +36,8 @@ model.fit(X_train, y_train)
 
 p_test = model.predict_proba(X_test)[:, 1]
 
+print("Brier score: ", brier_score_loss(y_test, p_test))
+print("Log loss: ", log_loss(y_test, p_test))
 print("ROC AUC: ", roc_auc_score(y_test, p_test))
 
 joblib.dump(model, RESULTS_DIR / "FL/simple_lv_model.joblib")
