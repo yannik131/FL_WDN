@@ -14,7 +14,7 @@ def has_lv_dynamics(df: pd.DataFrame):
     N_pred = len(predator_peaks)
 
     if N_prey < 3 or N_pred < 3 or abs(N_prey - N_pred) > 3:
-        return False 
+        return False
 
     prey_t = t.iloc[prey_peaks].to_numpy()
     pred_t = t.iloc[predator_peaks].to_numpy()
@@ -28,4 +28,4 @@ def has_lv_dynamics(df: pd.DataFrame):
     if np.sum(lags < 0) > 1:
         return False
 
-    return True 
+    return True
