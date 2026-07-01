@@ -11,7 +11,7 @@ rows_iter = list(mapping.itertuples(index=True, name=None))
 rows = []
 
 def process_row(row):
-    filename, p1, p2, p3, p4, p5, p6 = row
+    filename, p1, p2, p3, p4, p5, p6, r = row
     df = pd.read_csv(DATASETS_DIR / f"FL/full_lv_set/{filename}")
     is_lv = has_lv_dynamics(df)
     return (p1, p2, p3, p4, p5, p6, int(is_lv))

@@ -1,9 +1,9 @@
 import json
-from pathlib import Path 
+from pathlib import Path
 import tempfile
 import subprocess
 import copy
-import os 
+import os
 from collections import deque
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
@@ -18,9 +18,9 @@ class Task:
     def __init__(self, params, mapping):
         self.filename = params.pop("filename")
         self.r = params.pop("r")
-        self.params = params 
+        self.params = params
         self.mapping = mapping
-    
+
     def __apply_to_cfg(self, cfg):
         for param, keys in self.mapping.items():
             tmp_cfg = cfg
@@ -34,8 +34,8 @@ class Task:
         out = output_dir / self.filename
 
         if Path(out).exists():
-            return out 
-        
+            return out
+
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
             json.dump(cfg, tmp)
             tmp_path = tmp.name
@@ -57,18 +57,18 @@ class Task:
             Path(tmp_path).unlink(missing_ok=True)
 
         return out
-    
+
 def create_mapfile(tasks, path):
     # requires all tasks to be the same
     task = tasks[0]
     with open(path, "w") as f:
-        f.write("filename,r," + ",".join(task.params.keys()) + ",r\n")
+        f.write("filename," + ",".join(task.params.keys()) + ",r\n")
         for task in tasks:
             f.write(f"{task.filename}," + ",".join(fmt(v) for v in task.params.values()) + f",{task.r}\n")
-    
+
 def _run_task(task, cfg, output_dir):
     return task.run(cfg, output_dir)
-    
+
 def execute_tasks(tasks, cfg, output_dir):
     workers = os.cpu_count()
     queue_size = workers * 2
@@ -83,7 +83,7 @@ def execute_tasks(tasks, cfg, output_dir):
                     task = next(task_iter)
                     futures.append(pool.submit(_run_task, task, cfg, output_dir))
                 except StopIteration:
-                    break 
+                    break
 
             while futures:
                 done = next(as_completed(futures))
@@ -94,10 +94,10 @@ def execute_tasks(tasks, cfg, output_dir):
                     task = next(task_iter)
                     futures.append(pool.submit(_run_task, task, cfg, output_dir))
                 except StopIteration:
-                    pass 
+                    pass
         except KeyboardInterrupt:
             print("Interrupt detected, waiting for tasks to finish...")
             pool.shutdown(wait=False, cancel_futures=True)
 
-    
-    
+
+
