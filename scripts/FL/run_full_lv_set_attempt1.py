@@ -1,4 +1,4 @@
-from scipy.stats import qmc 
+from scipy.stats import qmc
 from util.task import Task, execute_tasks, create_mapfile
 from util.paths import DATASETS_DIR, CONFIG_DIR
 import json
@@ -25,7 +25,6 @@ mapfile_path = DATASETS_DIR / "FL/full_lv_set.csv"
 create_mapfile(tasks, mapfile_path)
 
 output_dir = DATASETS_DIR / "FL/full_lv_set/"
-output_dir.mkdir(parents=True, exist_ok=True)
 with open(CONFIG_DIR / "FL/preyPredator.json") as f:
     cfg = json.load(f)
 

@@ -59,7 +59,7 @@ class Task:
         return out
 
 def create_mapfile(tasks, path):
-    # requires all tasks to be the same
+    # requires all tasks to have the same parameters
     task = tasks[0]
     with open(path, "w") as f:
         f.write("filename," + ",".join(task.params.keys()) + ",r\n")
@@ -70,6 +70,7 @@ def _run_task(task, cfg, output_dir):
     return task.run(cfg, output_dir)
 
 def execute_tasks(tasks, cfg, output_dir):
+    output_dir.mkdir(parents=True, exist_ok=True)
     workers = os.cpu_count()
     queue_size = workers * 2
     futures = deque()
