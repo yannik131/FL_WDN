@@ -7,7 +7,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 csv_dir = DATASETS_DIR / "FL/full_lv_set/"
 mapping = pd.read_csv(DATASETS_DIR / "FL/full_lv_set.csv")
 
-rows_iter = list(mapping.itertuples(index=True, name=None))
+rows_iter = list(mapping.itertuples(index=False, name=None))
 rows = []
 
 def process_row(row):
