@@ -7,13 +7,14 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 csv_dir = DATASETS_DIR / "FL/full_lv_set/"
 mapping = pd.read_csv(DATASETS_DIR / "FL/full_lv_set.csv")
 
-rows_iter = list(mapping.itertuples(index=True))
+rows_iter = list(mapping.itertuples(index=True, name=None))
 rows = []
 
 def process_row(row):
-    df = pd.read_csv(DATASETS_DIR / f"FL/full_lv_set/{row.filename}")
+    filename, p1, p2, p3, p4, p5, p6 = row
+    df = pd.read_csv(DATASETS_DIR / f"FL/full_lv_set/{filename}")
     is_lv = has_lv_dynamics(df)
-    return (row.p1, row.p2, row.p3, row.p4, row.p5, row.p6, int(is_lv))
+    return (p1, p2, p3, p4, p5, p6, int(is_lv))
 
 if __name__ == "__main__":
     with ProcessPoolExecutor(max_workers=4) as pool:
