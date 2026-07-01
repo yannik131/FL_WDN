@@ -1,5 +1,5 @@
 import pandas as pd
-from .lv_classifier import has_lv_dynamics
+from FL.lv_classifier import has_lv_dynamics
 from tqdm import tqdm
 from util.paths import DATASETS_DIR
 from concurrent.futures import ProcessPoolExecutor, as_completed
