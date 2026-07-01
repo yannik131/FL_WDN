@@ -1,4 +1,4 @@
-from pathlib import Path 
+from pathlib import Path
 from collections import defaultdict
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
@@ -9,23 +9,23 @@ import numpy as np
 from tqdm import tqdm
 import pickle
 import joblib
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
+from util.paths import DATASETS_DIR, MODELS_DIR, RESULTS_DIR
 
-ROOT_DIR = Path(__file__).parent.parent.parent
-DATA_DIR = ROOT_DIR / "datasets/WDN/simple_transformation_set/"
-MAP_FILE = ROOT_DIR / "datasets/WDN/simple_transformation_set.txt"
-MODEL_OUT = ROOT_DIR / "models/WDN/simple_transformation_mlp.joblib"
-RESULT_OUT = ROOT_DIR / "results/WDN/simple_transformation/ex2/"
+DATA_DIR = DATASETS_DIR / "WDN/simple_transformation_set/"
+MAP_FILE = DATASETS_DIR / "WDN/simple_transformation_set.txt"
+MODEL_OUT = MODELS_DIR / "WDN/simple_transformation_mlp.joblib"
+RESULT_OUT = RESULTS_DIR / "WDN/simple_transformation/ex2/"
 T_MAX = 60
 T_GRID = np.linspace(0, T_MAX, 301)
 RANDOM_STATE = 0
 
 def load_mean_trajectories():
-    trajectories_file_pickled = ROOT_DIR / "datasets/WDN/simple_transformation_trajectories.pkl"
+    trajectories_file_pickled = DATASETS_DIR / "WDN/simple_transformation_trajectories.pkl"
     if trajectories_file_pickled.exists():
         with open(trajectories_file_pickled, "rb") as f:
             return pickle.load(f)
-    
+
     mapping = pd.read_csv(MAP_FILE)
     grouped = defaultdict(list)
 
@@ -72,11 +72,11 @@ def build_dataset(trajectories):
         N = A0 + B0
 
         if N == 0:
-            continue 
+            continue
 
-        A0_frac = A0 / N 
-        B0_frac = B0 / N 
-        A_frac_series = tr["A_mean"] / N 
+        A0_frac = A0 / N
+        B0_frac = B0 / N
+        A_frac_series = tr["A_mean"] / N
 
         for t, a_frac in zip(T_GRID, A_frac_series):
             X.append([A0_frac, B0_frac, np.log1p(N), p, t / T_MAX])
@@ -123,7 +123,7 @@ def train_model(X, y, group_ids):
     model.fit(X_train_s, y_train_s)
 
     y_pred_s = model.predict(X_test_s)
-    y_pred = y_scaler.inverse_transform(y_pred_s.reshape(-1, 1)).ravel() 
+    y_pred = y_scaler.inverse_transform(y_pred_s.reshape(-1, 1)).ravel()
 
     mse = mean_squared_error(y_test, y_pred)
     print(f"Test MSE on A/n: {mse:.6e}")
@@ -136,9 +136,9 @@ def train_model(X, y, group_ids):
 
 def predict_series(bundle, A0, B0, p, t_grid=None, round_counts=False):
     if t_grid is None:
-        t_grid = T_GRID 
+        t_grid = T_GRID
 
-    N = A0 + B0 
+    N = A0 + B0
     if N == 0:
         return pd.DataFrame(
             {"ElapsedTime[s]": t_grid, "A": np.zeros_like(t_grid), "B": np.zeros_like(t_grid)}
@@ -159,11 +159,11 @@ def predict_series(bundle, A0, B0, p, t_grid=None, round_counts=False):
     A_frac = bundle["y_scaler"].inverse_transform(A_frac_s.reshape(-1, 1)).ravel()
 
     A = np.clip(A_frac * N, 0.0, float(N))
-    B = N - A 
+    B = N - A
 
     if round_counts:
         A = np.rint(A).astype(int)
-        B = N - A 
+        B = N - A
 
     return pd.DataFrame(
         {
