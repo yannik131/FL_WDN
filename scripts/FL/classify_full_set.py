@@ -5,7 +5,7 @@ from util.paths import DATASETS_DIR
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 set_name = "full_lv_set_2"
-csv_dir = DATASETS_DIR / f"FL/{set_name/"
+csv_dir = DATASETS_DIR / f"FL/{set_name}/"
 mapping = pd.read_csv(DATASETS_DIR / f"FL/{set_name}.csv")
 
 rows_iter = list(mapping.itertuples(index=False, name=None))
