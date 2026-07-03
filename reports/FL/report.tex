@@ -1,0 +1,111 @@
+\documentclass[a4paper]{scrartcl}
+
+\usepackage{csquotes}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{amsfonts}
+\usepackage{subcaption}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{graphicx}
+\usepackage[labelfont=bf]{caption}
+\usepackage{bbm}
+
+\bibliographystyle{vancouver}
+
+% #1: path to the image
+% #2: caption for the figure
+% #3: label for the figure
+% #4: optional height (default 7cm)
+\newcommand{\insertfigure}[4][7cm]{%
+    \begin{figure}[H]
+        \centering
+        \includegraphics[height=#1, width=\linewidth, keepaspectratio]{#2}
+        \caption{#3}
+        \label{#4}
+    \end{figure}
+}
+
+
+% #1: path to the first image
+% #2: path to the second image
+% #3: caption for the entire figure
+% #4: label for the figure
+\newcommand{\insertfigures}[5][5cm]{
+	\begin{figure}[H]
+		\centering
+		\begin{subfigure}[t]{0.45\textwidth}
+			\centering
+			\caption{}
+			\includegraphics[height=#1, width=\linewidth,keepaspectratio]{#2}
+		\end{subfigure}
+		\hfill
+		\begin{subfigure}[t]{0.45\textwidth}
+			\centering
+			\caption{}
+			\includegraphics[height=#1, width=\linewidth, keepaspectratio]{#3}
+		\end{subfigure}
+		\caption{#4}
+		\label{#5}
+	\end{figure}
+}
+
+\pagenumbering{gobble}
+
+\begin{document}
+
+\begin{center}
+    {
+        Written report for \enquote{Learning from Distributed Data}\\
+    }
+
+    \vspace{1.5cm}
+
+    {\large
+        Report by\\
+        Yannik Schroeder
+    }
+
+    \vspace{1.5cm}
+
+    \today
+
+    \vspace*{\fill}
+\end{center}
+
+\clearpage
+\pagenumbering{Roman}
+
+\tableofcontents
+
+\pagebreak
+
+\pagenumbering{arabic}
+
+\section{Introduction}
+
+Creating the training data
+
+\begin{enumerate}
+    \item df has columns p1, p2, ..., is_lv
+    \item X has columns p1, p2, ..., p6
+    \item y has columns is_lv
+    \item X_train and X_test are a 80/20 random subset split of X
+    \item y_train, y_test are a 80/20 random subset split of y. With \texttt{stratify=y} the ratio of true to false classes (which was about 3,000/100,000 = 3\%) is kept in y_train and y_test
+    \item StandardScaler transforms X_train to 0 mean and standard variance (1)
+    \item It is fitted to the values from the training dataset and uses these to transform the test dataset. This avoids the test dataset to be too similar to the train dataset.
+    \item X and y are split into N random subsets (cohesive regions would mostly contain 0's since there are so few 1's in the dataset)
+    \item each client split contains the same number of 0 and 1 results, indices are random shuffled to avoid any regularity coming from original data
+\end{enumerate}
+
+\pagebreak
+
+\addcontentsline{toc}{section}{References}
+
+\bibliography{refs}
+
+\end{document}

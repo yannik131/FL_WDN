@@ -2,3 +2,8 @@
 env/
 __pycache__
 datasets
+*.aux
+*.fls
+*.log
+*.gz
+*latexmk
