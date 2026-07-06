@@ -11,7 +11,7 @@ HERE = Path(__file__).parent
 
 for ax, filename in zip(axes, ["bad.csv", "medium.csv", "good.csv"]):
     print(filename)
-    df = pd.read_csv(HERE / "../datasets/FL/example" / filename)
+    df = pd.read_csv(HERE / "../../datasets/FL/example" / filename)
     df = df.drop(columns=['Resource'])
     W = 500
     t, prey, predator = df['ElapsedTime[s]'], savgol_filter(df['Prey'], W, 3), savgol_filter(df['Predator'], W, 3)

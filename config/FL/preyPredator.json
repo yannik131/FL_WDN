@@ -34,7 +34,7 @@
             {
                 "educt1": "Prey",
                 "educt2": "Predator",
-                "probability": 0.03,
+                "probability": 0.4,
                 "product1": "Predator",
                 "product2": "Predator"
             },

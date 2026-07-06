@@ -87,11 +87,99 @@
 
 \section{Introduction}
 
-In 2025, I started developing a simulation software for reaction networks called \textit{Cell}~\cite{cell}. The software simulates collisions of circular 2D particles, so-called \textit{Discs}, and reactions thereof. The main output of the simulation are the particle counts over time, as visible in the right-hand side of the screenshot in \ref{fig_cell_screenshot}.
+\subsection{The cell simulation project}
+In 2025, I started developing a simulation software for reaction networks called \textit{Cell}~\cite{cell}. The software simulates collisions of circular 2D particles, so-called \textit{Discs}, and reactions thereof. The main output of the simulation are the particle counts over time, as visible in the right-hand side of the screenshot in \cref{fig_cell_screenshot}.
 
-\insertfigure{figures/cell_screenshot.jpg}{Screenshot of the cell simulation software. The plot on the right-hand side shows the disc counts over time.}{fig_cell_screenshot}
+\insertfigure{figures/cell_screenshot.png}{Screenshot of the cell simulation software. The simulation widget on the left shows the simulation state in real time. The plot widget on the right-hand side shows the disc counts over time.}{fig_cell_screenshot}
 
-Creating the training data
+To simulate a network with \textit{Cell}, a configuration can be created and saved as \texttt{.json} with the GUI. The configuration consists of the following parameters.
+
+\subsection*{Time step}
+The time step $\Delta t$ controls the accuracy of the simulation. After each simulation step, every disc is moved by $\Delta \vec{r} = \vec{v}\Delta t$. Smaller $\Delta t$ make the simulation more accurate but are more CPU intensive.
+
+\subsection*{Most probable speed}
+The velocity components of the discs are each sampled from a Gaussian distribution:
+
+\begin{equation*}
+    v_x, v_y \sim \mathcal{N}(0, \sigma^2).
+\end{equation*}
+
+The standard deviation is calculated using the user-defined most probable speed $v_{\text{mp}}$ and the mass $m$ of the disc:
+
+\begin{equation*}
+    \sigma = \frac{v_{\text{mp}}}{m}.
+\end{equation*}
+
+\subsubsection*{Disc types}
+Every disc in the simulation has a user-defined \textit{disc type}. Each disc type has a name, a mass $m$ and a radius $r$. With the GUI, the user can also associate a color to each disc type which is used to color discs in the simulation and plot widgets. We will call the set of disc types $D$.
+
+\subsubsection*{Reactions}
+Two categories of reactions are supported: Unimolecular reactions with time-based probabilities and bimolecular reactions with collision-based probabilities. The simulation supports four kinds of reactions. In the context of this project, only the following two kinds are relevant.
+
+\textit{Transformation reactions} $A \rightarrow B$: The educt changes its disc type such that $m_B = m_A$ and $v_B = v_A$. The reaction probability $p$ is given as a probability for the reaction per second:
+
+\begin{equation*}
+    p = 1 - (1-p')^{\frac{1}{\Delta t}},
+\end{equation*}
+
+with the simulation time step $\Delta t$ and the success probability $p'$.
+
+\textit{Exchange reactions} $A + B \rightarrow C + D$: For each educt $A$ and $B$, the product most similar in size is chosen and the disc type is changed accordingly: $A \rightarrow X$, $B \rightarrow Y$ with either $X = C$ and $Y = D$ or $X = D$ and $Y = C$. $m_A + m_B = m_C + m_D$ is enforced. For energy conservation, the product velocities are scaled after the reaction:
+
+\begin{equation*}
+    v_C = v_X\sqrt{\frac{m_A}{m_X}},\hspace{1cm} v_D = v_Y\sqrt{\frac{m_B}{m_Y}}.
+\end{equation*}
+
+The reaction probability $p$ is given as a probability for the reaction after each collision of the educts.\\
+The set of all reactions and their probabilities will be called $\Omega$.
+
+\subsubsection*{Simulation size and distribution}
+The simulation boundaries are a circle of radius $R$ with a total disc count of $N$. Using the largest disc type radius $r_{\text{max}}$ in the configuration for the edge length, $N$ discs are distributed across a uniform grid. Initial disc counts are specified using a disc type distribution $f$, which assigns relative frequencies to each disc type. Note that depending on $R$, the grid might not fit the requested $N$ discs.
+
+\subsubsection*{The configuration}
+With the above notation, each simulation configuration is a vector
+
+\begin{equation*}
+    (\Delta t, v_{\text{mp}}, D, \Omega, R, N, f).
+\end{equation*}
+
+Using a configuration saved as a \texttt{.json} file, the simulation can be run from the command line by specifying the simulation duration and the storage interval. It will output a \texttt{.csv} file with the disc counts averaged for each storage interval. If the storage interval is equal to or smaller than $\Delta t$, counts are not averaged and printed after every simulation step.
+
+\subsection{Lotka-Volterra dynamics}
+To test the simulation project, a simple prey-predator configuration was created. The configuration consists of the three disc types $D = \{\text{Prey}, \text{Predator}, \text{Resource}\}$ and the following reactions:
+
+\begin{enumerate}
+    \item $\text{Prey} + \text{Predator} \rightarrow \text{Predator} + \text{Predator}$ with $p_1$: Predators convert prey to predator.
+    \item $\text{Prey} + \text{Resource} \rightarrow \text{Prey} + \text{Prey}$ with $p_2$: Prey converts resource to prey.
+    \item $\text{Prey} \rightarrow \text{Resource}$ with $p_3$: Prey dies and transforms back to resource.
+    \item $\text{Predator} \rightarrow \text{Resource}$ with $p_4$: Predator dies and transforms back to resource.
+    \item $\text{Resource} \rightarrow \text{Prey}$ with $p_5$: Resource transforms to prey, introducing prey to the simulation.
+    \item $\text{Resource} \rightarrow \text{Predator}$ with $p_6$: Resource transforms to predators, introducing predators to the simulation.
+\end{enumerate}
+
+Initially, the simulation only contains discs of type $\text{Resource}$. With fixed $f$, $\Delta t$, $v_{\text{mp}}$, $N$ and $R$, reaction probabilities were tweaked until the particle counts over time reliably produced the dynamics visible in the example plot in \cref{fig_lv_time_series_example}.
+
+\insertfigure{figures/example_good.png}{Example trajectory of disc type counts using a simple prey-predator configuration over 60s. Prey and predator counts show a distinct periodic characteristic, with prey peaks always followed by predator peaks.}{fig_lv_time_series_example}
+
+The dynamic shown in \cref{fig_lv_time_series_example} is very similar to dynamics exhibited by solutions of the the well-known Lotka-Volterra equations:
+
+\begin{align*}
+    \frac{dx}{dt} = \alpha x - \beta xy,\\
+    \frac{dy}{dt} = -\gamma y + \delta xy.
+\end{align*}
+
+Here, the parameters $\alpha$, $\beta$, $\gamma$ and $\delta$ have similar roles to the probabilities $p_i$ of the above configuration. The solutions of these equations are however deterministic, assume a well-mixed environment and do not model a third reaction species like the resource in the above model with disc types. As long as the initial prey and predator counts and the parameters are all strictly positive, solutions of the Lotka-Volterra equations always show phase-shifted, periodic prey-predator peaks. In the more general reaction model with disc types, only a small region of the parameter space shows this dynamic.\\
+The goal of this project is to find the region of the six dimensional probability space for some fixed $f$, $\Delta t$, $v_{\text{mp}}$, $N$ and $R$ that is likely to exhibit Lotka-Volterra (LV) dynamics. To this end, two binary classifiers will be trained on a dataset obtained from the simulation: One using traditional ML methods with a single model, and a second using averaged weights from multiple models trained on subsets of the dataset using FL methods.
+
+\section{Related work}
+
+\section{Methodology}
+- First, vary only p1 and p2 to create simple dataset and model
+- Next, create a larger dataset and model
+- Then move to FL methods
+- Create heatmaps and compare
+
+\subsection{Training a model}
 
 \begin{enumerate}
     \item df has columns \texttt{p1, p2, ..., is\_lv}
@@ -105,13 +193,10 @@ Creating the training data
     \item each client split contains the same number of 0 and 1 results, indices are random shuffled to avoid any regularity coming from original
 \end{enumerate}
 
-\section{Related work}
-
-\section{Methodology}
-
 \section{Results}
 
 \section{Discussion}
+Compare heatmaps of $(p_1, p_i)$ for the simple and FL models. Compare brier/log/auc scores. Discuss if the whole region was found or just a subspace of it. Compare FL and simple methodology: Implementation difficulty, training speed. Compare IID and non-IID dataset splits for FL.
 
 \section{Conclusion}
 
