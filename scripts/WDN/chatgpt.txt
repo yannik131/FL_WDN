@@ -89,11 +89,20 @@ ElapsedTime[s],A,B
 0.012,1142,138
 ...
 
-I want to train a model that can predict particle trajectories based on simulation parameters.
-I started with a simple transformation reaction dataset where I only varied p, A0 and B0. I trained a simple MLPRegression model to predict counts of A at time t. B is obtained by calculating N - B. This worked well.
-Now I want to continue with a more general model that predicts whole trajectories. To keep it simple, I stick with the simple dataset for p, A0 and B0. Good candidates are LSTM, GRU, neural ODE or graph neural ODE. Which should I use?
-In the next step I want to create a dataset with multiple transformation reactions:
-A -> B with p1, B -> C with p2, C -> A with p3
-Which model can support something like this? I'm doing this for an AI course at university. I've briefly looked into graph neural ODEs but they seem very complicated. I have about a month to train some models and create a presentation and a written report.
-Keep in mind that eventually I would like to predict simulations like the config above: Total particle count over time varies, multiple reaction types with different probabilities, etc. So choose a model that can support that.
-Also: Tell me which of the parameters of the config I should vary and which I should keep constant in this 1 month university project.
+I want to train a model that can predict particle trajectories based on simulation parameters. I want to use a neural ODE. Relevant simulation parameters are:
+- N: total disc count
+- initial relative disc type frequencies f: f_A, f_B, ...
+- Reactions R_i (each is one of: transformation A -> B, combination A + B -> C, decomposition A -> B + C, exchange A + B -> C + D)
+- reaction probabilities p_i
+
+I started with a simple transformation reaction dataset (r is repetition, each simulation is run 5 times)
+filename,p,N,f_A,f_B,r
+simple_transformation_set_2_0000.csv,0,0,1,0,0
+simple_transformation_set_2_0001.csv,0,0,1,0,1
+simple_transformation_set_2_0002.csv,0,0,1,0,2
+simple_transformation_set_2_0003.csv,0,0,1,0,3
+simple_transformation_set_2_0004.csv,0,0,1,0,4
+simple_transformation_set_2_0005.csv,0,1,0.000,1.000,0
+...
+
+Show me the code to train a neural ODE model that can predict particle counts (or relative counts over N) for each disc type over time given N, f, R_i and p_i. Keep it short and simple. I want a full script, but as concise as possible. If you need preprocessing of the data or want to output other things, put that in separate code blocks.
