@@ -11,7 +11,6 @@
 \usepackage{url}
 \usepackage{hyperref}
 \usepackage{cleveref}
-\usepackage{graphicx}
 \usepackage[labelfont=bf]{caption}
 \usepackage{bbm}
 
@@ -88,6 +87,10 @@
 
 \section{Introduction}
 
+In 2025, I started developing a simulation software for reaction networks called \textit{Cell}~\cite{cell}. The software simulates collisions of circular 2D particles, so-called \textit{Discs}, and reactions thereof. The main output of the simulation are the particle counts over time, as visible in the right-hand side of the screenshot in \ref{fig_cell_screenshot}.
+
+\insertfigure{figures/cell_screenshot.jpg}{Screenshot of the cell simulation software. The plot on the right-hand side shows the disc counts over time.}{fig_cell_screenshot}
+
 Creating the training data
 
 \begin{enumerate}
@@ -99,8 +102,18 @@ Creating the training data
     \item StandardScaler transforms X_train to 0 mean and standard variance (1)
     \item It is fitted to the values from the training dataset and uses these to transform the test dataset. This avoids the test dataset to be too similar to the train dataset.
     \item X and y are split into N random subsets (cohesive regions would mostly contain 0's since there are so few 1's in the dataset)
-    \item each client split contains the same number of 0 and 1 results, indices are random shuffled to avoid any regularity coming from original data
+    \item each client split contains the same number of 0 and 1 results, indices are random shuffled to avoid any regularity coming from original
 \end{enumerate}
+
+\section{Related work}
+
+\section{Methodology}
+
+\section{Results}
+
+\section{Discussion}
+
+\section{Conclusion}
 
 \pagebreak
 

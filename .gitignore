@@ -7,3 +7,6 @@ datasets
 *.log
 *.gz
 *latexmk
+*.bbl
+*.out
+*.toc
