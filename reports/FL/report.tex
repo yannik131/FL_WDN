@@ -94,12 +94,12 @@ In 2025, I started developing a simulation software for reaction networks called
 Creating the training data
 
 \begin{enumerate}
-    \item df has columns p1, p2, ..., is_lv
-    \item X has columns p1, p2, ..., p6
-    \item y has columns is_lv
-    \item X_train and X_test are a 80/20 random subset split of X
-    \item y_train, y_test are a 80/20 random subset split of y. With \texttt{stratify=y} the ratio of true to false classes (which was about 3,000/100,000 = 3\%) is kept in y_train and y_test
-    \item StandardScaler transforms X_train to 0 mean and standard variance (1)
+    \item df has columns \texttt{p1, p2, ..., is\_lv}
+    \item X has columns \texttt{p1, p2, ..., p6}
+    \item y has columns \texttt{is\_lv}
+    \item \texttt{X\_train} and X\_test are a 80/20 random subset split of X
+    \item y\_train, y\_test are a 80/20 random subset split of y. With \texttt{stratify=y} the ratio of true to false classes (which was about 3,000/100,000 = 3\%) is kept in y\_train and y\_test
+    \item StandardScaler transforms X\_train to 0 mean and standard variance (1)
     \item It is fitted to the values from the training dataset and uses these to transform the test dataset. This avoids the test dataset to be too similar to the train dataset.
     \item X and y are split into N random subsets (cohesive regions would mostly contain 0's since there are so few 1's in the dataset)
     \item each client split contains the same number of 0 and 1 results, indices are random shuffled to avoid any regularity coming from original
