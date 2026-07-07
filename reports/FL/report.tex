@@ -10,6 +10,7 @@
 \usepackage{subcaption}
 \usepackage{url}
 \usepackage{hyperref}
+\usepackage{xurl}
 \usepackage{cleveref}
 \usepackage[labelfont=bf]{caption}
 \usepackage{bbm}
@@ -34,16 +35,16 @@
 % #2: path to the second image
 % #3: caption for the entire figure
 % #4: label for the figure
-\newcommand{\insertfigures}[5][5cm]{
+\newcommand{\insertfigures}[5][7cm]{
 	\begin{figure}[H]
 		\centering
-		\begin{subfigure}[t]{0.45\textwidth}
+		\begin{subfigure}[t]{0.49\textwidth}
 			\centering
 			\caption{}
 			\includegraphics[height=#1, width=\linewidth,keepaspectratio]{#2}
 		\end{subfigure}
 		\hfill
-		\begin{subfigure}[t]{0.45\textwidth}
+		\begin{subfigure}[t]{0.49\textwidth}
 			\centering
 			\caption{}
 			\includegraphics[height=#1, width=\linewidth, keepaspectratio]{#3}
@@ -146,6 +147,7 @@ With the above notation, each simulation configuration is a vector
 Using a configuration saved as a \texttt{.json} file, the simulation can be run from the command line by specifying the simulation duration and the storage interval. It will output a \texttt{.csv} file with the disc counts averaged for each storage interval. If the storage interval is equal to or smaller than $\Delta t$, counts are not averaged and printed after every simulation step.
 
 \subsection{Lotka-Volterra dynamics}
+\label{subsection_lv_dynamics}
 To test the simulation project, a simple prey-predator configuration was created. The configuration consists of the three disc types $D = \{\text{Prey}, \text{Predator}, \text{Resource}\}$ and the following reactions:
 
 \begin{enumerate}
@@ -174,6 +176,47 @@ The goal of this project is to find the region of the six dimensional probabilit
 \section{Related work}
 
 \section{Methodology}
+The project consists of three parts. First, a LV-classifier needs to be developed. It should be simple and fast enough to quickly label thousands of CSV-files with disc count trajectories. Second, a simple dataset where only $p_1$ and $p_2$ (see \cref{subsection_lv_dynamics}) are varied will be created. The other four probabilities will be fixed at values that are known to exhibit LV-dynamics. The resulting 2D probability space should give a first impression of whether the region of interest is closed or not. Third, a larger dataset spanning the entire 6D probability space will be created. Three different models will be trained with this data:
+
+\begin{itemize}
+    \item A single baseline model using a traditional scikit-learn pipeline
+    \item A FL model using four client splits by splitting the dataset
+    \item \begin{itemize}
+        \item randomly
+        \item into cohesive 6D regions
+    \end{itemize}
+\end{itemize}
+
+All models will be Multi Layer Perceptron (MLP) classifiers. MLP will work best if the decision boundaries are smooth and nonlinear in 6D. If the model performs poorly, a Support Vector Machine (SVM) approach will be tried instead. (WHY?).
+
+\subsection{Developing a LV-classifier}
+The definition of "LV-like dynamics" in the context of this project is mostly qualitative and refers to the following characteristics:
+
+\begin{itemize}
+    \item Prominent prey-predator peaks that appear in pairs
+    \item The peaks are phase-shifted with the predator peaks lagging behind the prey peaks
+\end{itemize}
+
+\Cref{fig_lv_good_bad} shows the classifier in action. The classifier smoothes the curves using \path{scipy.signal.savgol_filter} and mostly relies on the \texttt{prominence} parameter of \path{scipy.signal.find_peaks}, which measures how much the peak stands out from its surrounding~\cite{prominence}.
+
+\insertfigure{figures/lv_good_bad.jpg}{LV classification of two prey-predator count trajectories. The smoothed curves were drawn on top of the original count trajectories. Trajectories are labeled as yes or no depending on how many peaks are found and if predator peaks lag behind prey preaks. Peaks are found using \texttt{scipy.signal.find\_peaks} and marked with dots.}{fig_lv_good_bad}
+
+To find the optimal parameters for the classifier, a 2D dataset was created by varying $p_1$ and $p_2$ in steps of 1\% with fixed other probabilities. Each simulation was run four times. The prominence was varied by viewing samples at the decision boundary and seeing if the LV dynamic was pronounced enough, i. e. the simulation showed clearly visible prey and predator population peaks. A comparison of the results using two different prominences is shown in \cref{fig_lv_prom_comp}.
+
+\insertfigure{figures/simple_prom_comp.jpg}{Label frequencies assigned by the LV classifier to the 2D dataset for different values of the \texttt{prominence} parameter. A prominence of 50 for both prey and predator peaks yielded many positive results that showed only weak LV dynamics after reviewing. A prominence of 150 for prey and 120 for predator peaks showed a much smaller positive region with very few outliers.}{fig_lv_prom_comp}
+
+\subsection{Training a model on a 2D subspace}
+Using the 2D dataset where only $p_1$ and $p_2$ were varied, a simple MLP regression model was trained. Its decision boundary and the original LV classification results are compared in \cref{fig_simple_model_comp}. Since the region for yes-labels was closed and followed a clear pattern, the MLP learned the decision boundary very well and ended up with an ROC AUC of about 0.98.
+
+\insertfigure{figures/simple_comp.jpg}{Comparison of empirically estimated and model-predicted probability landscapes.}{fig_simple_model_comp}
+
+\subsection{Training a model on the full 6D space}
+
+\subsubsection{The baseline model}
+
+\subsubsection{FL models}
+
+The total simulation duration for all datasets will be 60 seconds. This should be enough to see even slow developing prey-predator peaks.
 - Define a lv classifier: Prominence, find\_peaks, visual judgement, etc.
 - First, vary only p1 and p2 to create simple dataset and model
 - Next, create a larger dataset and model

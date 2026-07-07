@@ -7,9 +7,9 @@ from util.paths import DATASETS_DIR, RESULTS_DIR
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import joblib
 import numpy as np
+import matplotlib.ticker as mtick
 
-heatmap_df_path = DATASETS_DIR / "FL/lv_heat_map_simple_df.csv"
-
+heatmap_df_path = DATASETS_DIR / "FL/lv_heat_map_simple_prom_150_120.csv"
 
 def process_row(row):
     df = pd.read_csv(DATASETS_DIR / f"FL/simple_lv_set/{row.Filename}")
@@ -39,14 +39,12 @@ if not heatmap_df_path.exists():
             rows.append(f.result())
 
     df_all = pd.DataFrame(rows, columns=["p1", "p2", "is_lv"])
-    df_all.to_csv(DATASETS_DIR / "FL/lv_heat_map_simple_df.csv", index=False)
+    df_all.to_csv(heatmap_df_path, index=False)
 else:
     df_all = pd.read_csv(heatmap_df_path)
 
 heat = df_all.groupby(["p1", "p2"])["is_lv"].mean().reset_index()
 pivot = heat.pivot(index="p1", columns="p2", values="is_lv") * 100
-
-heat.to_csv(DATASETS_DIR / "FL/lv_heat_map_pivot.csv", index=False)
 
 model = joblib.load(RESULTS_DIR / "FL/simple_lv_model.joblib")
 
@@ -62,7 +60,7 @@ grid_model["lv_prob_model"] = model.predict_proba(grid_model[["p1", "p2"]])[:, 1
 
 pivot_model = grid_model.pivot(index="p1", columns="p2", values="lv_prob_model") * 100
 
-fig, axes = plt.subplots(1, 2, constrained_layout=True, figsize=(12, 8))
+fig, axes = plt.subplots(1, 2, constrained_layout=True, figsize=(12, 6))
 
 sns.heatmap(
     pivot,
@@ -82,13 +80,14 @@ sns.heatmap(
     vmax=100,
     square=True,
     ax=axes[1],
+    cbar_kws={'format': mtick.PercentFormatter(100)}
 )
 axes[1].set_title("Predicted")
 
 set_ticks(axes[0], len(pivot.columns))
 set_ticks(axes[1], len(pivot_model.columns))
 
-plt.savefig(RESULTS_DIR / "FL/simple_comp.png", dpi=300)
+plt.savefig(RESULTS_DIR / "FL/simple_comp.jpg", dpi=300)
 
 unique_probs = np.sort(grid_model["lv_prob_model"].round(2).unique())
 print(unique_probs)

@@ -6,9 +6,8 @@ def has_lv_dynamics(df: pd.DataFrame):
     W = 500
     t, prey, predator = df['ElapsedTime[s]'], savgol_filter(df['Prey'], W, 3), savgol_filter(df['Predator'], W, 3)
 
-    prominence = 150
-    prey_peaks, _ = find_peaks(prey, prominence=prominence)
-    predator_peaks, _ = find_peaks(predator, prominence=prominence)
+    prey_peaks, _ = find_peaks(prey, prominence=150)
+    predator_peaks, _ = find_peaks(predator, prominence=120)
 
     N_prey = len(prey_peaks)
     N_pred = len(predator_peaks)
@@ -25,7 +24,7 @@ def has_lv_dynamics(df: pd.DataFrame):
         lags.append(pred_t[idx] - pt)
 
     lags = np.array(lags)
-    if np.sum(lags < 0) > 1:
+    if np.median(lags) < 0:
         return False
 
     return True
