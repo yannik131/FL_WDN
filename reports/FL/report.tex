@@ -144,7 +144,7 @@ With the above notation, each simulation configuration is a vector
     (\Delta t, v_{\text{mp}}, D, \Omega, R, N, f).
 \end{equation*}
 
-Using a configuration saved as a \texttt{.json} file, the simulation can be run from the command line by specifying the simulation duration and the storage interval. It will output a \texttt{.csv} file with the disc counts averaged for each storage interval. If the storage interval is equal to or smaller than $\Delta t$, counts are not averaged and printed after every simulation step.
+Using a configuration saved as a \texttt{.json} file, the simulation can be run from the command line by specifying the simulation duration and the storage interval. It will output a \texttt{.csv} file with the disc counts averaged for each storage interval. If the storage interval is equal to or smaller than $\Delta t$, counts are not averaged and printed after every simulation step. The total simulation duration for all datasets will be 60 seconds. This should be enough to see even slow developing prey-predator peaks.
 
 \subsection{Lotka-Volterra dynamics}
 \label{subsection_lv_dynamics}
@@ -174,6 +174,7 @@ Here, the parameters $\alpha$, $\beta$, $\gamma$ and $\delta$ have similar roles
 The goal of this project is to find the region of the six dimensional probability space for some fixed $f$, $\Delta t$, $v_{\text{mp}}$, $N$ and $R$ that is likely to exhibit Lotka-Volterra (LV) dynamics. To this end, two binary classifiers will be trained on a dataset obtained from the simulation: One using traditional ML methods with a single model, and a second using averaged weights from multiple models trained on subsets of the dataset using FL methods.
 
 \section{Related work}
+Find papers for "Does FedAvg create good models when clients see only a single class of the training dataset (like only negative results)?"
 
 \section{Methodology}
 The project consists of three parts. First, a LV-classifier needs to be developed. It should be simple and fast enough to quickly label thousands of CSV-files with disc count trajectories. Second, a simple dataset where only $p_1$ and $p_2$ (see \cref{subsection_lv_dynamics}) are varied will be created. The other four probabilities will be fixed at values that are known to exhibit LV-dynamics. The resulting 2D probability space should give a first impression of whether the region of interest is closed or not. Third, a larger dataset spanning the entire 6D probability space will be created. Three different models will be trained with this data:
@@ -206,29 +207,26 @@ To find the optimal parameters for the classifier, a 2D dataset was created by v
 \insertfigure{figures/simple_prom_comp.jpg}{Label frequencies assigned by the LV classifier to the 2D dataset for different values of the \texttt{prominence} parameter. A prominence of 50 for both prey and predator peaks yielded many positive results that showed only weak LV dynamics after reviewing. A prominence of 150 for prey and 120 for predator peaks showed a much smaller positive region with very few outliers.}{fig_lv_prom_comp}
 
 \subsection{Training a model on a 2D subspace}
-Using the 2D dataset where only $p_1$ and $p_2$ were varied, a simple MLP regression model was trained. Its decision boundary and the original LV classification results are compared in \cref{fig_simple_model_comp}. Since the region for yes-labels was closed and followed a clear pattern, the MLP learned the decision boundary very well and ended up with an ROC AUC of about 0.98.
+Using the 2D dataset where only $p_1$ and $p_2$ were varied, a simple MLP regression model was trained. Since each unique combination was simulated four times, it is important to group shuffle split the train and test datasets to avoid unique combinations to appear in both, since the point of the testing dataset is to
+Its decision boundary and the original LV classification results are compared in \cref{fig_simple_model_comp}.
+TODO: Do this for the FL model as well otherwise probs will be less than 50\%.
+Since the region for yes-labels was closed and followed a clear pattern, the MLP learned the decision boundary very well and ended up with an ROC AUC of about 0.98.
 
 \insertfigure{figures/simple_comp.jpg}{Comparison of empirically estimated and model-predicted probability landscapes on a fixed 100x100 grid.}{fig_simple_model_comp}
 
 \subsection{Training a model on the full 6D space}
 With the available CPUs for this project a total of about 100,000 simulations can be run in a day. Since not every run will yield LV dynamics, each configuration should be run several times. For this dataset, 20,000 unique parameter vectors will be run five times each.\\
-A first approach using latin hypercube sampling with \texttt{n = 20,000} across the whole 6D probability space resulted in less than five positive results, indicating a very small surface area of the interesting region in 6D space. To obtain a more targeted dataset, the viable range of $p_1 \in [0.1, 1]$ and $p_2 \in [0, 0.2]$ from \cref{fig_simple_model_comp} was used instead. $p_3$ through $p_6$ were fixed to $\pm 0.1$ within the value used for the runs that resulted in \cref{fig_simple_model_comp}. The targeted dataset was created using latin hypercube sampling with subsequent scaling to the bounds. This dataset resulted in a total of about 5,000 positive hits with about 2,200 ($\approx 10\%$) unique probability vectors. The model trained on this dataset was also tested on the dataset from \cref{fig_simple_model_comp}. The results are shown in \cref{fig_full_model_comp_1}.
+A first approach used latin hypercube sampling with $N = 20\,000$ across the whole 6D probability space. Latin hypercube sampling evenly divides each dimension into $N$ values and then randomly samples $N$ vectors from all possible $N^6$ combinations. For $p_i \in [0, 1]$ this resulted in less than five positive results, indicating a very small surface area of the interesting region in 6D space. To obtain a more targeted dataset, the viable range of $p_1 \in [0.1, 1]$ and $p_2 \in [0, 0.2]$ from \cref{fig_simple_model_comp} was used instead. $p_3$ through $p_6$ were fixed to $\pm 0.1$ within the value used for the runs that resulted in \cref{fig_simple_model_comp}. The targeted dataset was created using latin hypercube sampling with subsequent scaling to the bounds. This dataset resulted in a total of about 5,000 positive hits with about 2,200 ($\approx 10\%$) unique probability vectors. The model trained on this dataset was also tested on the dataset from \cref{fig_simple_model_comp}. The results are shown in \cref{fig_full_model_comp_1}.
 
 \insertfigure{figures/full_comp.jpg}{Comparison of empirically estimated and model-predicted probability landscapes on a fixed 100x100 grid. The training dataset only contained values for $p_1 \in [0.1, 1]$ and the model didn't learn the correct distribution for $p_1 \in [0, 0.1]$.}{fig_full_model_comp_1}
 
-The model extrapolated incorrectly in the region of $p_1 \in [0, 0.1]$ since it wasn't included in the training dataset and nearby empirical values are positive.
+The model extrapolated incorrectly in the region of $p_1 \in [0, 0.1]$ since it wasn't included in the training dataset and nearby empirical values are positive. Subsequently, a third and final dataset with $p_1 \in [0, 1]$ was created and used to train another MLP regressor. Its performance on the $p_1$ x $p_2$ is shown in \cref{fig_full_model_comp_2}.
 
 \subsubsection{The baseline model}
 
 
 \subsubsection{FL models}
-
-The total simulation duration for all datasets will be 60 seconds. This should be enough to see even slow developing prey-predator peaks.
-- Define a lv classifier: Prominence, find\_peaks, visual judgement, etc.
-- First, vary only p1 and p2 to create simple dataset and model
-- Next, create a larger dataset and model
-- Then move to FL methods
-- Create heatmaps and compare
+Since the dataset is already fully available, federated learning will be emulated by splitting the dataset into several smaller ones. The number of emulated clients in this project is set to four.
 
 \subsection{Training a model}
 

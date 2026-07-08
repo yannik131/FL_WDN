@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from util.paths import DATASETS_DIR, RESULTS_DIR
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GroupShuffleSplit
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPClassifier
@@ -14,9 +14,16 @@ groups = pd.factorize(list(zip(df["p1"], df["p2"], df["p3"], df["p4"], df["p5"],
 X = df[["p1", "p2", "p3", "p4", "p5", "p6"]].to_numpy()
 y = df["is_lv"].astype(int).to_numpy()
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, stratify=y, random_state=42
+gss = GroupShuffleSplit(
+    n_splits=1,
+    test_size=0.2,
+    random_state=42
 )
+train_idx, test_idx = next(gss.split(X, y, groups=groups))
+
+
+X_train, X_test = X[train_idx], X[test_idx]
+y_train, y_test = y[train_idx], y[test_idx]
 
 print("True cases in test set: ", np.unique(y_test, return_counts=True))
 
