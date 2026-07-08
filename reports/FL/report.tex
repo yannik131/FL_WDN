@@ -208,11 +208,18 @@ To find the optimal parameters for the classifier, a 2D dataset was created by v
 \subsection{Training a model on a 2D subspace}
 Using the 2D dataset where only $p_1$ and $p_2$ were varied, a simple MLP regression model was trained. Its decision boundary and the original LV classification results are compared in \cref{fig_simple_model_comp}. Since the region for yes-labels was closed and followed a clear pattern, the MLP learned the decision boundary very well and ended up with an ROC AUC of about 0.98.
 
-\insertfigure{figures/simple_comp.jpg}{Comparison of empirically estimated and model-predicted probability landscapes.}{fig_simple_model_comp}
+\insertfigure{figures/simple_comp.jpg}{Comparison of empirically estimated and model-predicted probability landscapes on a fixed 100x100 grid.}{fig_simple_model_comp}
 
 \subsection{Training a model on the full 6D space}
+With the available CPUs for this project a total of about 100,000 simulations can be run in a day. Since not every run will yield LV dynamics, each configuration should be run several times. For this dataset, 20,000 unique parameter vectors will be run five times each.\\
+A first approach using latin hypercube sampling with \texttt{n = 20,000} across the whole 6D probability space resulted in less than five positive results, indicating a very small surface area of the interesting region in 6D space. To obtain a more targeted dataset, the viable range of $p_1 \in [0.1, 1]$ and $p_2 \in [0, 0.2]$ from \cref{fig_simple_model_comp} was used instead. $p_3$ through $p_6$ were fixed to $\pm 0.1$ within the value used for the runs that resulted in \cref{fig_simple_model_comp}. The targeted dataset was created using latin hypercube sampling with subsequent scaling to the bounds. This dataset resulted in a total of about 5,000 positive hits with about 2,200 ($\approx 10\%$) unique probability vectors. The model trained on this dataset was also tested on the dataset from \cref{fig_simple_model_comp}. The results are shown in \cref{fig_full_model_comp_1}.
+
+\insertfigure{figures/full_comp.jpg}{Comparison of empirically estimated and model-predicted probability landscapes on a fixed 100x100 grid. The training dataset only contained values for $p_1 \in [0.1, 1]$ and the model didn't learn the correct distribution for $p_1 \in [0, 0.1]$.}{fig_full_model_comp_1}
+
+The model extrapolated incorrectly in the region of $p_1 \in [0, 0.1]$ since it wasn't included in the training dataset and nearby empirical values are positive.
 
 \subsubsection{The baseline model}
+
 
 \subsubsection{FL models}
 

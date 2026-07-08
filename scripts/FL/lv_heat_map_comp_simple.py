@@ -87,7 +87,7 @@ axes[1].set_title("Predicted")
 set_ticks(axes[0], len(pivot.columns))
 set_ticks(axes[1], len(pivot_model.columns))
 
-plt.savefig(RESULTS_DIR / "FL/simple_comp.jpg", dpi=300)
+plt.savefig(RESULTS_DIR / "FL/full_comp.jpg", dpi=300)
 
 unique_probs = np.sort(grid_model["lv_prob_model"].round(2).unique())
 print(unique_probs)

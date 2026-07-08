@@ -1,8 +1,8 @@
 I wrote a C++ simulation for reaction networks. Parameters of the simulation are:
 - Disc types (mass, radius, name)
 - Reactions
- - Unimolecular reactions A -> B and A -> B + C with probability per second
- - Bimolecular reactions A + B -> C and A + B -> C + D with probability per collision
+- Unimolecular reactions A -> B and A -> B + C with probability per second
+- Bimolecular reactions A + B -> C and A + B -> C + D with probability per collision
 - Simulation radius
 - Disc count of the simulation (discs are distributed randomly across a uniform grid)
 - Initial disc type distribution (like A: 0.3, B: 0.7, C: 0.0)
@@ -11,73 +11,73 @@ I wrote a C++ simulation for reaction networks. Parameters of the simulation are
 The config is saved in a json file. Here's an excerpt of a simulation config with 4 reactions:
 
 {
-    "config": {
-        "cellMembraneType": {
-            "discCount": 500,
-            "discTypeDistribution": {
-                "A": 0.25,
-                "B": 0.25,
-                "C": 0.25,
-                "D": 0.25
-            },
-            "name": "Cell membrane",
-            "radius": 100.0
-        },
-        "discTypes": [
-            {
-                "mass": 1.0,
-                "name": "A",
-                "radius": 1.0
-            },
-            {
-                "mass": 2.0,
-                "name": "B",
-                "radius": 2.0
-            },
-            {
-                "mass": 1.0,
-                "name": "C",
-                "radius": 1.0
-            },
-            {
-                "mass": 2.0,
-                "name": "D",
-                "radius": 2.0
-            }
-        ],
-        "mostProbableSpeed": 60.0,
-        "reactions": [
-            {
-                "educt1": "A",
-                "educt2": "",
-                "probability": 0.5,
-                "product1": "C",
-                "product2": ""
-            },
-            {
-                "educt1": "B",
-                "educt2": "",
-                "probability": 0.5,
-                "product1": "A",
-                "product2": "C"
-            },
-            {
-                "educt1": "A",
-                "educt2": "C",
-                "probability": 0.5,
-                "product1": "B",
-                "product2": ""
-            },
-            {
-                "educt1": "A",
-                "educt2": "B",
-                "probability": 0.5,
-                "product1": "A",
-                "product2": "D"
-            }
-        ],
-    },
-    "configVersion": "1",
+"config": {
+"cellMembraneType": {
+"discCount": 500,
+"discTypeDistribution": {
+"A": 0.25,
+"B": 0.25,
+"C": 0.25,
+"D": 0.25
+},
+"name": "Cell membrane",
+"radius": 100.0
+},
+"discTypes": [
+{
+"mass": 1.0,
+"name": "A",
+"radius": 1.0
+},
+{
+"mass": 2.0,
+"name": "B",
+"radius": 2.0
+},
+{
+"mass": 1.0,
+"name": "C",
+"radius": 1.0
+},
+{
+"mass": 2.0,
+"name": "D",
+"radius": 2.0
+}
+],
+"mostProbableSpeed": 60.0,
+"reactions": [
+{
+"educt1": "A",
+"educt2": "",
+"probability": 0.5,
+"product1": "C",
+"product2": ""
+},
+{
+"educt1": "B",
+"educt2": "",
+"probability": 0.5,
+"product1": "A",
+"product2": "C"
+},
+{
+"educt1": "A",
+"educt2": "C",
+"probability": 0.5,
+"product1": "B",
+"product2": ""
+},
+{
+"educt1": "A",
+"educt2": "B",
+"probability": 0.5,
+"product1": "A",
+"product2": "D"
+}
+],
+},
+"configVersion": "1",
 }
 
 The simulation outputs csv files with particle counts after each simulation time step:
@@ -95,8 +95,8 @@ I want to train a model that can predict particle trajectories based on simulati
 - Reactions R_i (each is one of: transformation A -> B, combination A + B -> C, decomposition A -> B + C, exchange A + B -> C + D)
 - reaction probabilities p_i
 
-I started with a simple transformation reaction dataset (r is repetition, each simulation is run 5 times)
-filename,p,N,f_A,f_B,r
+I started with a simple transformation reaction dataset (r is repetition, each simulation is run 5 times). Mapping is at datasets/WDN/simple_transformation_set_2.csv:
+filename,A->B,N,f_A,f_B,r
 simple_transformation_set_2_0000.csv,0,0,1,0,0
 simple_transformation_set_2_0001.csv,0,0,1,0,1
 simple_transformation_set_2_0002.csv,0,0,1,0,2
@@ -105,4 +105,9 @@ simple_transformation_set_2_0004.csv,0,0,1,0,4
 simple_transformation_set_2_0005.csv,0,1,0.000,1.000,0
 ...
 
-Show me the code to train a neural ODE model that can predict particle counts (or relative counts over N) for each disc type over time given N, f, R_i and p_i. Keep it short and simple. I want a full script, but as concise as possible. If you need preprocessing of the data or want to output other things, put that in separate code blocks.
+csv files are in datasets/WDN/simple_transformation_set_2/simple_transformation_set_2_{i:04d}.csv. Note that the mapping file lists the reaction types in the header column, the subsequent values are reaction probabilities (time-based for unimelocular, collision-based for bimolecular). Future mapping files may look like this:
+filename,Prey+Resource->Prey+Prey,Prey->Resource,Predator+Prey->Predator+Predator,Resource+Resource->Prey,N,f_Prey,f_Predator,f_Resource,r
+run1.csv,0.1,0.2,0.1,0.2,1202,0.3,0.6,0.1,0
+...
+
+Show me the code to train a neural ODE model that can predict particle counts (or relative counts over N) for each disc type over time given the simple transformation mapping file and the csv files. Keep it short and simple. I want a full script, but as concise as possible. If you need preprocessing of the data or want to output other things, put that in separate code blocks. The training logic should be in a separate block.
