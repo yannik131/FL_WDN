@@ -21,7 +21,7 @@ tasks = []
 i = 0
 for sample in samples:
     for r in range(5):
-        params = dict(filename=f"full_lv_set_2_{i:04d}.csv", r=r)
+        params = dict(filename=f"full_lv_set_3_{i:04d}.csv", r=r)
         for j in range(1, 7):
             params[f"p{j}"] = sample[j - 1]
         tasks.append(Task(params, mapping))
