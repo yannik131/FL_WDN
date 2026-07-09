@@ -8,7 +8,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import roc_auc_score, brier_score_loss, log_loss
 import joblib
 
-df = pd.read_csv(DATASETS_DIR / "FL/lv_heat_map_full_2.csv")
+df = pd.read_csv(DATASETS_DIR / "FL/lv_heat_map_full_3.csv")
 groups = pd.factorize(list(zip(df["p1"], df["p2"], df["p3"], df["p4"], df["p5"], df["p6"])))[0]
 
 X = df[["p1", "p2", "p3", "p4", "p5", "p6"]].to_numpy()

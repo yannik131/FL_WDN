@@ -226,7 +226,11 @@ The model extrapolated incorrectly in the region of $p_1 \in [0, 0.1]$ since it 
 
 
 \subsubsection{FL models}
-Since the dataset is already fully available, federated learning will be emulated by splitting the dataset into several smaller ones. The number of emulated clients in this project is set to four.
+Since the dataset is already fully available, federated learning will be emulated by splitting the dataset into several smaller ones. Plan:
+
+- Split dataset either randomly (stratified, group shuffled) or cohesively (non-stratified, but also cohesive groups)
+- For each approach, vary the number of clients between 2, 4, 8 and 16
+- For each combination, plot model performance on p1/p2 heatmap and AUC as a function of N clients
 
 \subsection{Training a model}
 
