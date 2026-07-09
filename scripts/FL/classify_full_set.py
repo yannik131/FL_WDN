@@ -4,7 +4,7 @@ from tqdm import tqdm
 from util.paths import DATASETS_DIR
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-set_name = "full_lv_set_2"
+set_name = "full_lv_set_3"
 csv_dir = DATASETS_DIR / f"FL/{set_name}/"
 mapping = pd.read_csv(DATASETS_DIR / f"FL/{set_name}.csv")
 
@@ -26,7 +26,7 @@ if __name__ == "__main__":
                 rows.append(f.result())
 
             df_all = pd.DataFrame(rows, columns=["p1", "p2", "p3", "p4", "p5", "p6", "is_lv"])
-            df_all.to_csv(DATASETS_DIR / "FL/lv_heat_map_full_2.csv", index=False)
+            df_all.to_csv(DATASETS_DIR / "FL/lv_heat_map_full_3.csv", index=False)
         except KeyboardInterrupt:
             print("Shutting down pool..")
             pool.shutdown(wait=True, cancel_futures=True)

@@ -12,6 +12,16 @@ import joblib
 import matplotlib.pyplot as plt
 from util.paths import DATASETS_DIR, MODELS_DIR, RESULTS_DIR
 
+
+"""
+New approach:
+Input parameters of model:
+N, f_Xi, R = [
+    ([X_ib], [X_ia], p),
+]
+"""
+
+
 DATA_DIR = DATASETS_DIR / "WDN/simple_transformation_set/"
 MAP_FILE = DATASETS_DIR / "WDN/simple_transformation_set.txt"
 MODEL_OUT = MODELS_DIR / "WDN/simple_transformation_mlp.joblib"
