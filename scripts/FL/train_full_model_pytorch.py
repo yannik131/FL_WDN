@@ -7,7 +7,6 @@ from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_auc_score, brier_score_loss, log_loss
 from util.paths import DATASETS_DIR
-from tqdm import tqdm
 
 # Binary classifier with 6 input nodes, 2 hidden layers with 64 nodes each, and 1 output node
 # layer 1: 6*64 + 64
@@ -59,6 +58,8 @@ sgkf = StratifiedGroupKFold(
 
 # store folds 2-5 in train and fold 1 in test
 train_idx, test_idx = next(sgkf.split(X, y, groups))
+np.save(DATASETS_DIR / "FL/train_idx_3.npy", train_idx)
+np.save(DATASETS_DIR / "FL/test_idx_3.npy", test_idx)
 X_train, X_test = X[train_idx], X[test_idx]
 y_train, y_test = y[train_idx], y[test_idx]
 

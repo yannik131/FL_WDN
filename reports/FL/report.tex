@@ -226,7 +226,7 @@ The model extrapolated incorrectly in the region of $p_1 \in [0, 0.1]$ since it 
 
 
 \subsubsection{FL models}
-Since the dataset is already fully available, federated learning will be emulated by splitting the dataset into several smaller ones. Plan:
+Since the dataset is already fully available, federated learning will be emulated by splitting the dataset into several smaller ones. The same test/train split used for the baseline model will be used for the FL model. The test dataset will not be visible by any clients and will be only be used to evaluate the final model. Additionally, heatmaps on the $p_1$ x $p_2$ plane will be compared for each model. A single global \texttt{StandardScaler} will be trained on the training data and used by all models involved to avoid a varying internal representation of the data.
 
 - Split dataset either randomly (stratified, group shuffled) or cohesively (non-stratified, but also cohesive groups)
 - For each approach, vary the number of clients between 2, 4, 8 and 16

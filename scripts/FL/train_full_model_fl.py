@@ -2,12 +2,10 @@ import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import TensorDataset, DataLoader
 from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_auc_score, brier_score_loss, log_loss
 from util.paths import DATASETS_DIR
-from tqdm import tqdm
 import flwr as fl
 
 def split(X, y, n=5, scaler=None):
@@ -53,19 +51,24 @@ df = pd.read_csv(DATASETS_DIR / "FL/lv_heat_map_full_3.csv")
 probs = ["p1","p2","p3","p4","p5","p6"]
 X = df[probs].to_numpy()
 y = df["is_lv"].astype(np.float32).to_numpy()
-X_train, X_test, y_train, y_test, scaler = split(X, y, n=10)
-groups = pd.factorize(pd.DataFrame(X_train).apply(tuple, axis=1))[0]
-# FL strategy:
-# The baseline model used a train/test split
-# the FL model needs to be trained on the same train split
-# metrics for both models will be calculated with the same test split
-# both models need to use the same scaler trained on the same train split
+train_idx = np.load(DATASETS_DIR / "FL/train_idx_3.npy")
+test_idx = np.load(DATASETS_DIR / "FL/test_idx_3.npy")
+X_train, X_test = X[train_idx], X[test_idx]
+y_train, y_test = y[train_idx], y[test_idx]
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+groups = pd.factorize(pd.DataFrame(X[train_idx]).apply(tuple, axis=1))[0]
 sgkf = StratifiedGroupKFold(
     n_splits=N_CLIENTS,
     shuffle=True,
     random_state=SEED
 )
 client_datasets = []
+# split returns train_idx, test_idx
+# we get N_CLIENTS splits where test_idx contains 1/N_CLIENTS of the data
+# we ignore train_idx to "abuse" this to get N_CLIENTS stratified group splits
 for _, idx in sgkf.split(X_train, y_train, groups):
     client_datasets.append((X_train[idx], y_train[idx]))
 
@@ -87,8 +90,8 @@ def predict_proba(model, X):
     return probs
 
 class FlowerClient(fl.client.NumPyClient):
-    def __init__(self, X, y):
-        self.X_train, self.X_test, self.y_train, self.y_test, _ = split(X, y, scaler=scaler)
+    def __init__(self, X_train, y_train):
+        self.X_train, self.y_train = X_train, y_train
         self.model = MLP()
 
     def get_parameters(self, config):
@@ -98,12 +101,6 @@ class FlowerClient(fl.client.NumPyClient):
         set_parameters(self.model, parameters)
         train_local(self.model, self.X_train, self.y_train)
         return get_parameters(self.model), len(self.X_train), {}
-
-    def evaluate(self, parameters, config):
-        set_parameters(self.model, parameters)
-        p = predict_proba(self.model, self.X_test)
-        loss = log_loss(self.y_test, p)
-        return loss, len(self.X_test), {}
 
 def train_local(model, X, y):
     model.train()
@@ -138,8 +135,8 @@ class SaveModelStrategy(fl.server.strategy.FedAvg):
 strategy = SaveModelStrategy(
     fraction_fit=1.0,
     min_fit_clients=N_CLIENTS,
-    fraction_evaluate=1,
-    min_evaluate_clients=N_CLIENTS,
+    fraction_evaluate=0,
+    min_evaluate_clients=0,
     evaluate_fn=None,
     initial_parameters=fl.common.ndarrays_to_parameters(get_parameters(global_model))
 )
