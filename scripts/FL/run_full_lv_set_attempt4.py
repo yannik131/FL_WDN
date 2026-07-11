@@ -21,16 +21,16 @@ tasks = []
 i = 0
 for sample in samples:
     for r in range(5):
-        params = dict(filename=f"full_lv_set_3_{i:04d}.csv", r=r)
+        params = dict(filename=f"full_lv_set_4_{i:04d}.csv", r=r)
         for j in range(1, 7):
             params[f"p{j}"] = sample[j - 1]
         tasks.append(Task(params, mapping))
         i += 1
 
-mapfile_path = DATASETS_DIR / "FL/full_lv_set_3.csv"
+mapfile_path = DATASETS_DIR / "FL/full_lv_set_4.csv"
 create_mapfile(tasks, mapfile_path)
 
-output_dir = DATASETS_DIR / "FL/full_lv_set_3/"
+output_dir = DATASETS_DIR / "FL/full_lv_set_4/"
 output_dir.mkdir(parents=True, exist_ok=True)
 with open(CONFIG_DIR / "FL/preyPredator.json") as f:
     cfg = json.load(f)
