@@ -9,3 +9,5 @@
 bin/cell-cli-linux filter=lfs diff=lfs merge=lfs -text
 bin/cell-cli-mac filter=lfs diff=lfs merge=lfs -text
 bin/cell-cli.exe filter=lfs diff=lfs merge=lfs -text
+datasets/FL/test_idx_3.npy filter=lfs diff=lfs merge=lfs -text
+datasets/FL/train_idx_3.npy filter=lfs diff=lfs merge=lfs -text
