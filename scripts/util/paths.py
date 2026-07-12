@@ -1,11 +1,12 @@
-from pathlib import Path 
+from pathlib import Path
 import platform
 
-ROOT_DIR = Path(__file__).resolve().parent.parent.parent 
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 CONFIG_DIR = ROOT_DIR / "config/"
 DATASETS_DIR = ROOT_DIR / "datasets/"
 MODELS_DIR = ROOT_DIR / "models/"
 RESULTS_DIR = ROOT_DIR / "results/"
+REPORTS_DIR = ROOT_DIR / "reports/"
 
 def get_binary_path():
     system = platform.system().lower()

@@ -111,3 +111,25 @@ run1.csv,0.1,0.2,0.1,0.2,1202,0.3,0.6,0.1,0
 ...
 
 Show me the code to train a neural ODE model that can predict particle counts (or relative counts over N) for each disc type over time given the simple transformation mapping file and the csv files. Keep it short and simple. I want a full script, but as concise as possible. If you need preprocessing of the data or want to output other things, put that in separate code blocks. The training logic should be in a separate block.
+
+-----
+
+My simulation has the following parameters:
+- time step \Delta t
+- most probable speed v_mp
+- disc types set D (= {A, B} or = {Prey, Predator, Resource}, ...)
+- reactions set \Omega (={(A->B, p1), (A+B->C, p2), ...} or similar, arbitrary length). There is a total of 4 supported reaction types: A->B, A->B+C, A+B->C, A+B->C+D
+- simulation radius R
+- total initial disc count N
+- initial disc type distribution f (={f_A=0.3,f_B=0.7} or ={f_Prey=0, f_Predator=0, f_Resource=1})
+Output of the simulation is a csv file with type counts over time
+ElapsedTime[s],A,B
+0,3425,0
+0.003,3424,1
+0.006,3421,4
+0.009,3419,6
+0.012,3418,7
+0.015,3416,9
+...
+
+I want to train an autoregressive GNN that can predict particle counts over time with the given input. Show me how this can be done in python. What is the topology of the input graph for this GNN? How would training look like? Show me the essence.

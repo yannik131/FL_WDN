@@ -8,29 +8,6 @@ from sklearn.metrics import roc_auc_score, brier_score_loss, log_loss
 from util.paths import DATASETS_DIR
 import flwr as fl
 
-def split(X, y, n=5, scaler=None):
-    groups = pd.factorize(
-        pd.DataFrame(X).apply(tuple, axis=1)
-    )[0]
-
-    sgkf = StratifiedGroupKFold(
-        n_splits=n,
-        shuffle=True,
-        random_state=SEED
-    )
-
-    train_idx, test_idx = next(sgkf.split(X, y, groups))
-    X_train, X_test = X[train_idx], X[test_idx]
-    y_train, y_test = y[train_idx], y[test_idx]
-    if scaler is None:
-        scaler = StandardScaler()
-        X_train = scaler.fit_transform(X_train)
-    else:
-        X_train = scaler.transform(X_train)
-    X_test = scaler.transform(X_test)
-
-    return X_train, X_test, y_train, y_test, scaler
-
 class MLP(nn.Module):
     def __init__(self):
         super().__init__()
@@ -45,11 +22,10 @@ class MLP(nn.Module):
     def forward(self, x):
         return self.net(x).squeeze(1)
 
-N_CLIENTS = 4
+N_CLIENTS = 1
 SEED = 42
 df = pd.read_csv(DATASETS_DIR / "FL/lv_heat_map_full_3.csv")
-probs = ["p1","p2","p3","p4","p5","p6"]
-X = df[probs].to_numpy()
+X = df[["p1","p2","p3","p4","p5","p6"]].to_numpy()
 y = df["is_lv"].astype(np.float32).to_numpy()
 train_idx = np.load(DATASETS_DIR / "FL/train_idx_3.npy")
 test_idx = np.load(DATASETS_DIR / "FL/test_idx_3.npy")
@@ -59,18 +35,40 @@ scaler = StandardScaler()
 X_train = scaler.fit_transform(X_train)
 X_test = scaler.transform(X_test)
 
-groups = pd.factorize(pd.DataFrame(X[train_idx]).apply(tuple, axis=1))[0]
-sgkf = StratifiedGroupKFold(
-    n_splits=N_CLIENTS,
-    shuffle=True,
-    random_state=SEED
-)
-client_datasets = []
-# split returns train_idx, test_idx
-# we get N_CLIENTS splits where test_idx contains 1/N_CLIENTS of the data
-# we ignore train_idx to "abuse" this to get N_CLIENTS stratified group splits
-for _, idx in sgkf.split(X_train, y_train, groups):
-    client_datasets.append((X_train[idx], y_train[idx]))
+def split_dataset_randomly():
+    client_datasets = []
+    groups = pd.factorize(pd.DataFrame(X[train_idx]).apply(tuple, axis=1))[0]
+    sgkf = StratifiedGroupKFold(
+        n_splits=N_CLIENTS,
+        shuffle=True,
+        random_state=SEED
+    )
+    # split returns train_idx, test_idx
+    # we get N_CLIENTS splits where test_idx contains 1/N_CLIENTS of the data
+    # we ignore train_idx to "abuse" this to get N_CLIENTS stratified group splits
+    for _, idx in sgkf.split(X_train, y_train, groups):
+        client_datasets.append((X_train[idx], y_train[idx]))
+
+    return client_datasets
+
+def split_dataset_cohesively():
+    # bounds of p_i used for dataset creation
+    lower = np.array([0, 0.0, 0.0, 0.8, 0, 0])
+    upper = np.array([1.0, 0.2, 0.15, 1.0, 0.11, 0.11])
+    X_raw = X[train_idx]
+    client_datasets = []
+    for N in range(N_CLIENTS):
+        lower_factor = N / N_CLIENTS
+        upper_factor = (N + 1) / N_CLIENTS
+        mins = lower + lower_factor * (upper - lower)
+        maxs = lower + upper_factor * (upper - lower)
+
+        mask = (X_raw >= mins) & (X_raw <= maxs)
+        idx = np.where(np.all(mask, axis=1))[0]
+        client_datasets.append((X_train[idx], y_train[idx]))
+    return client_datasets
+
+client_datasets = split_dataset_cohesively()
 
 # return all model parameters
 def get_parameters(model):
