@@ -122,7 +122,7 @@ My simulation has the following parameters:
 - simulation radius R
 - total initial disc count N
 - initial disc type distribution f (={f_A=0.3,f_B=0.7} or ={f_Prey=0, f_Predator=0, f_Resource=1})
-Output of the simulation is a csv file with type counts over time
+Output of the simulation is a csv file with type counts over time, example:
 ElapsedTime[s],A,B
 0,3425,0
 0.003,3424,1
@@ -132,4 +132,20 @@ ElapsedTime[s],A,B
 0.015,3416,9
 ...
 
-I want to train an autoregressive GNN that can predict particle counts over time with the given input. Show me how this can be done in python. What is the topology of the input graph for this GNN? How would training look like? Show me the essence.
+I want to train an autoregressive GNN that can predict particle counts over time with the given input.
+My initial transformation dataset has this mapping:
+
+filename,A->B,N,f_A,f_B,r
+simple_transformation_set_2_0000.csv,0,0,1,0,0
+simple_transformation_set_2_0001.csv,0,0,1,0,1
+simple_transformation_set_2_0002.csv,0,0,1,0,2
+simple_transformation_set_2_0003.csv,0,0,1,0,3
+simple_transformation_set_2_0004.csv,0,0,1,0,4
+simple_transformation_set_2_0005.csv,0,1,0.000,1.000,0
+simple_transformation_set_2_0006.csv,0,1,0.000,1.000,1
+simple_transformation_set_2_0007.csv,0,1,0.000,1.000,2
+...
+
+r is the repetition. The reaction column A->B contains the reaction probability. The remainig parameters are located in a json file, with json['config']['discTypes'] containing a list [{'mass': .., 'radius': .., 'name': ..}, ..] and json['config']['cellMembraneType'] having attributes 'discCount' (the N from the mapping file) and 'radius'. v_mp is in json['config']['mostProbableSpeed']. \Delta t is not really a relevant simulation parameter, it just controls the accuracy of the simulation and doesn't need to be trained on.
+I fixed all other parameters (R, v_mp, etc.). The mapping is located at DATASETS_DIR/"WDN/simple_transformation_set_2.csv", the corresponding csv files are in WDN/simple_transformation_set_2/, the json config in CONFIG_DIR/"WDN/transformation_simple.json". Give me a script that trains an autoregressive GNN on this dataset using pytorch geometric. It needs to be general, I want to add the other 3 reaction types later to the same dataset. Then show me in a separate block how to use this model to predict particle counts over time. The input graph should have the disc types and reactions as nodes. Edges mark educts/products. Node features are reaction probability for reaction nodes, and mass/radius for disc type nodes.
+Note that I just used A, B, .. for disc types as an example. Later datasets will use arbitrary names, for example D = {Prey, Predator, Resource} and Reactions = {(Predator+Prey->Predator+Predator, p1), (Resource->Prey, p2), ...} (but reactions will only occur in the 4 types I showed you).

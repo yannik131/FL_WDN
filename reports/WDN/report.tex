@@ -1,0 +1,118 @@
+\documentclass[a4paper]{scrartcl}
+
+\usepackage{csquotes}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{amsfonts}
+\usepackage{subcaption}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage{xurl}
+\usepackage{cleveref}
+\usepackage[labelfont=bf]{caption}
+\usepackage{bbm}
+
+\bibliographystyle{vancouver}
+
+% #1: path to the image
+% #2: caption for the figure
+% #3: label for the figure
+% #4: optional height (default 7cm)
+\newcommand{\insertfigure}[4][7cm]{%
+    \begin{figure}[H]
+        \centering
+        \includegraphics[height=#1, width=\linewidth, keepaspectratio]{#2}
+        \caption{#3}
+        \label{#4}
+    \end{figure}
+}
+
+
+% #1: path to the first image
+% #2: path to the second image
+% #3: caption for the entire figure
+% #4: label for the figure
+\newcommand{\insertfigures}[5][7cm]{
+	\begin{figure}[H]
+		\centering
+		\begin{subfigure}[t]{0.49\textwidth}
+			\centering
+			\caption{}
+			\includegraphics[height=#1, width=\linewidth,keepaspectratio]{#2}
+		\end{subfigure}
+		\hfill
+		\begin{subfigure}[t]{0.49\textwidth}
+			\centering
+			\caption{}
+			\includegraphics[height=#1, width=\linewidth, keepaspectratio]{#3}
+		\end{subfigure}
+		\caption{#4}
+		\label{#5}
+	\end{figure}
+}
+
+\pagenumbering{gobble}
+
+\begin{document}
+
+\begin{center}
+    {
+        Written report for \enquote{Machine Learning for Water Distribution Networks}\\
+    }
+
+    \vspace{1.5cm}
+
+    {\large
+        Report by\\
+        Yannik Schroeder
+    }
+
+    \vspace{1.5cm}
+
+    \today
+
+    \vspace*{\fill}
+\end{center}
+
+\clearpage
+\pagenumbering{Roman}
+
+\tableofcontents
+
+\pagebreak
+
+\pagenumbering{arabic}
+
+\section{Introduction}
+
+
+\section{Related work}
+
+\section{Methodology}
+The main challenge in this project is that the model should support an arbitrary number of disc types and reactions. A fixed-size MLP, for example, would fail for two reasons:
+
+\begin{itemize}
+    \item With a fixed number of input nodes, any input tuple $(\Delta t, v_{\text{mp}}, D, \Omega, R, N, f)$ would have to be compressed or padded into the same input vector size. If the number of input parameters exceeds the number of input nodes, information loss is inevitable
+    \item Re-ordering of reactions or disc types in the input vector would result in a different representation. A simulation with disc types $D = \{A, B\}$ would look entirely different from $D = \{B, A\}$ to the model
+\end{itemize}
+
+A graph neural network solves both of these issues. They guarantee that permutations of the same input graph result in the same internal representation. An example representation of a system with three species $D = \{A, B, C\}$ and two reactions $\Omega = \{\{A+B\rightarrow C, p_1\}, \{C \rightarrow A+B, p_2\}$ is shown in \cref{fig_reaction_graph_example}.
+
+\insertfigure{figures/reaction_graph_example.jpg}{An example reaction graph with three disc types and two reactions. Disc type properties and reaction probabilities are typically stored as node features.}{fig_reaction_graph_example}
+
+\section{Results}
+
+\section{Discussion}
+
+\section{Conclusion}
+
+\pagebreak
+
+\addcontentsline{toc}{section}{References}
+
+\bibliography{refs}
+
+\end{document}
