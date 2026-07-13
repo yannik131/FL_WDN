@@ -5,8 +5,18 @@ import torch.nn as nn
 from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_auc_score, brier_score_loss, log_loss
-from util.paths import DATASETS_DIR
+from util.paths import DATASETS_DIR, RESULTS_DIR
 import flwr as fl
+from dataclasses import dataclass
+from pathlib import Path
+import random
+
+SEED = 42
+torch.manual_seed(SEED)
+np.random.seed(SEED)
+random.seed(SEED)
+
+FEATURE_COLS = ["p1","p2","p3","p4","p5","p6"]
 
 class MLP(nn.Module):
     def __init__(self):
@@ -22,55 +32,48 @@ class MLP(nn.Module):
     def forward(self, x):
         return self.net(x).squeeze(1)
 
-N_CLIENTS = 1
-SEED = 42
-df = pd.read_csv(DATASETS_DIR / "FL/lv_heat_map_full_3.csv")
-X = df[["p1","p2","p3","p4","p5","p6"]].to_numpy()
-y = df["is_lv"].astype(np.float32).to_numpy()
-train_idx = np.load(DATASETS_DIR / "FL/train_idx_3.npy")
-test_idx = np.load(DATASETS_DIR / "FL/test_idx_3.npy")
-X_train, X_test = X[train_idx], X[test_idx]
-y_train, y_test = y[train_idx], y[test_idx]
-scaler = StandardScaler()
-X_train = scaler.fit_transform(X_train)
-X_test = scaler.transform(X_test)
+@dataclass
+class Dataset:
+    X_train_raw: np.ndarray
+    X_test_raw: np.ndarray
+    X_train_scaled: np.ndarray
+    X_test_scaled: np.ndarray
+    y_train: np.ndarray
+    y_test: np.ndarray
+    scaler: StandardScaler
+    dataset_path: Path
 
-def split_dataset_randomly():
+def split_dataset_randomly(n_clients, d: Dataset):
+    if n_clients == 1:
+        return [(d.X_train_scaled, d.y_train)]
+
     client_datasets = []
-    groups = pd.factorize(pd.DataFrame(X[train_idx]).apply(tuple, axis=1))[0]
+    groups = pd.factorize(pd.DataFrame(d.X_train_raw).apply(tuple, axis=1))[0]
     sgkf = StratifiedGroupKFold(
-        n_splits=N_CLIENTS,
+        n_splits=n_clients,
         shuffle=True,
         random_state=SEED
     )
     # split returns train_idx, test_idx
     # we get N_CLIENTS splits where test_idx contains 1/N_CLIENTS of the data
     # we ignore train_idx to "abuse" this to get N_CLIENTS stratified group splits
-    for _, idx in sgkf.split(X_train, y_train, groups):
-        client_datasets.append((X_train[idx], y_train[idx]))
+    for _, idx in sgkf.split(d.X_train_scaled, d.y_train, groups):
+        client_datasets.append((d.X_train_scaled[idx], d.y_train[idx]))
 
     return client_datasets
 
-def split_dataset_cohesively():
-    # bounds of p_i used for dataset creation
-    lower = np.array([0, 0.0, 0.0, 0.8, 0, 0])
-    upper = np.array([1.0, 0.2, 0.15, 1.0, 0.11, 0.11])
-    X_raw = X[train_idx]
+def split_dataset_cohesively(n_clients, d: Dataset):
+    # split cohesively along p1 axis since it runs from 0 to 1
     client_datasets = []
-    for N in range(N_CLIENTS):
-        lower_factor = N / N_CLIENTS
-        upper_factor = (N + 1) / N_CLIENTS
-        mins = lower + lower_factor * (upper - lower)
-        maxs = lower + upper_factor * (upper - lower)
+    for N in range(n_clients):
+        lower = N / n_clients
+        upper = (N + 1) / n_clients
 
-        mask = (X_raw >= mins) & (X_raw <= maxs)
-        idx = np.where(np.all(mask, axis=1))[0]
-        client_datasets.append((X_train[idx], y_train[idx]))
+        mask = (d.X_train_raw[:, 0] >= lower) & (d.X_train_raw[:, 0] <= upper)
+        idx = np.where(mask)[0]
+        client_datasets.append((d.X_train_scaled[idx], d.y_train[idx]))
     return client_datasets
 
-client_datasets = split_dataset_cohesively()
-
-# return all model parameters
 def get_parameters(model):
     return [val.detach().cpu().numpy() for _, val in model.state_dict().items()]
 
@@ -117,8 +120,6 @@ def train_local(model, X, y):
             loss.backward()
             optimizer.step()
 
-global_model = MLP()
-
 class SaveModelStrategy(fl.server.strategy.FedAvg):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -130,31 +131,100 @@ class SaveModelStrategy(fl.server.strategy.FedAvg):
             self.latest_parameters = aggregated_parameters
         return aggregated_parameters, aggregated_metrics
 
-strategy = SaveModelStrategy(
-    fraction_fit=1.0,
-    min_fit_clients=N_CLIENTS,
-    fraction_evaluate=0,
-    min_evaluate_clients=0,
-    evaluate_fn=None,
-    initial_parameters=fl.common.ndarrays_to_parameters(get_parameters(global_model))
-)
+def read_dataset(dataset_path, train_idx_path, test_idx_path):
+    df = pd.read_csv(dataset_path)
+    X = df[FEATURE_COLS].to_numpy()
+    y = df["is_lv"].astype(np.float32).to_numpy()
+    train_idx = np.load(train_idx_path)
+    test_idx = np.load(test_idx_path)
+    X_train, X_test = X[train_idx], X[test_idx]
+    y_train, y_test = y[train_idx], y[test_idx]
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
 
-def client_fn(cid: str):
-    X, y = client_datasets[int(cid)]
-    return FlowerClient(X, y).to_client()
+    d = Dataset(
+        X_train_raw=X_train,
+        X_test_raw=X_test,
+        X_train_scaled=X_train_scaled,
+        X_test_scaled=X_test_scaled,
+        y_train=y_train,
+        y_test=y_test,
+        scaler=scaler,
+        dataset_path=dataset_path
+    )
 
-history = fl.simulation.start_simulation(
-    client_fn=client_fn,
-    num_clients=N_CLIENTS,
-    config=fl.server.ServerConfig(num_rounds=10),
-    strategy=strategy,
-    client_resources={'num_cpus': 1},
-)
+    return d
 
-final_parameters = fl.common.parameters_to_ndarrays(strategy.latest_parameters)
-set_parameters(global_model, final_parameters)
-p = predict_proba(global_model, X_test)
+def train_fl_model(n_clients, client_datasets):
+    global_model = MLP()
+    strategy = SaveModelStrategy(
+        fraction_fit=1.0,
+        min_fit_clients=n_clients,
+        fraction_evaluate=0,
+        min_evaluate_clients=0,
+        evaluate_fn=None,
+        initial_parameters=fl.common.ndarrays_to_parameters(get_parameters(global_model))
+    )
 
-print("Brier score:", brier_score_loss(y_test, p))
-print("Log loss:", log_loss(y_test, p))
-print("ROC AUC:", roc_auc_score(y_test, p))
+    fl.simulation.start_simulation(
+        client_fn=lambda cid: FlowerClient(*client_datasets[int(cid)]).to_client(),
+        num_clients=n_clients,
+        config=fl.server.ServerConfig(num_rounds=10),
+        strategy=strategy,
+        client_resources={'num_cpus': 1},
+    )
+
+    final_parameters = fl.common.parameters_to_ndarrays(strategy.latest_parameters)
+    set_parameters(global_model, final_parameters)
+
+    return global_model
+
+def save_model(n_clients, split_random, d: Dataset, model):
+    p = predict_proba(model, d.X_test_scaled)
+
+    scores_csv = RESULTS_DIR / "FL/scores.csv"
+    if not scores_csv.exists():
+        with open(scores_csv, "w") as file:
+            file.write("model_id,n_clients,split_random,dataset_filename,brier,log,auc\n")
+
+    with open(scores_csv) as file:
+        model_id = sum(1 for _ in file) - 1
+
+    brier_score = brier_score_loss(d.y_test, p)
+    log_score = log_loss(d.y_test, p)
+    auc_score = roc_auc_score(d.y_test, p)
+
+    with open(scores_csv, "a") as file:
+        file.write(",".join(map(str, [model_id, n_clients, int(split_random), d.dataset_path.name, brier_score, log_score, auc_score])))
+        file.write("\n")
+
+    torch.save(
+        {
+            "state_dict": model.state_dict(),
+            "scaler_mean": d.scaler.mean_,
+            "scaler_scale": d.scaler.scale_,
+            "feature_cols": FEATURE_COLS,
+        },
+        RESULTS_DIR / f"FL/model_{model_id}.pt",
+    )
+
+def train_fl(n_clients, split_random, dataset_path, train_idx_path, test_idx_path):
+    d = read_dataset(dataset_path, train_idx_path, test_idx_path)
+
+    if split_random:
+        client_datasets = split_dataset_randomly(n_clients, d)
+    else:
+        client_datasets = split_dataset_cohesively(n_clients, d)
+
+    model = train_fl_model(n_clients, client_datasets)
+    save_model(n_clients, split_random, d, model)
+
+for n_clients in [32, 64]:
+    for split_random in [True, False]:
+        dataset_path = DATASETS_DIR / "FL/lv_heat_map_full_3.csv"
+        train_idx_path = DATASETS_DIR / "FL/train_idx_3.npy"
+        test_idx_path = DATASETS_DIR / "FL/test_idx_3.npy"
+
+        print(f"Training with n_clients={n_clients}, split_random={split_random}")
+        train_fl(n_clients, split_random, dataset_path, train_idx_path, test_idx_path)

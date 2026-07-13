@@ -247,6 +247,20 @@ Since the dataset is already fully available, federated learning will be emulate
 \end{enumerate}
 
 \section{Results}
+Train models with
+\begin{itemize}
+    \item N_CLIENTS=1,2,4,8,16
+    \item stratified group shuffled k fold split
+    \item cohesive $p_1$ split
+\end{itemize}
+
+Review/compare with baseline
+\begin{itemize}
+    \item ROC AUC, log loss, brier: plot against N_CLIENTS, baseline as dashed hline
+    \item $(p_1, p_2)$ heatmap with simple dataset
+\end{itemize}
+
+Also review 6 slices/heatmaps against p1.
 
 \section{Discussion}
 Compare heatmaps of $(p_1, p_i)$ for the simple and FL models. Compare brier/log/auc scores. Discuss if the whole region was found or just a subspace of it. Compare FL and simple methodology: Implementation difficulty, training speed. Compare IID and non-IID dataset splits for FL.
