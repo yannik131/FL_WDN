@@ -220,7 +220,7 @@ def train_fl(n_clients, split_random, dataset_path, train_idx_path, test_idx_pat
     model = train_fl_model(n_clients, client_datasets)
     save_model(n_clients, split_random, d, model)
 
-for n_clients in [32, 64]:
+for n_clients in [512]:
     for split_random in [True, False]:
         dataset_path = DATASETS_DIR / "FL/lv_heat_map_full_3.csv"
         train_idx_path = DATASETS_DIR / "FL/train_idx_3.npy"

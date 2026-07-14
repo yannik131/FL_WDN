@@ -82,7 +82,7 @@ X_test = torch.tensor(X_test, dtype=torch.float32)
 # they are all shuffled to avoid batches with only a single class
 train_loader = DataLoader(
     TensorDataset(X_train, y_train),
-    batch_size=256, shuffle=True
+    batch_size=128, shuffle=True
 )
 
 model = MLP()
@@ -95,7 +95,7 @@ criterion = nn.BCEWithLogitsLoss()
 # weight_decay penalizes large weights to avoid overfitting
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-3)
 
-for epoch in range(40):
+for epoch in range(50):
     print(epoch)
     # xb, yb contains the batch of 256 samples from the training data
     for xb, yb in train_loader:
@@ -131,8 +131,7 @@ for epoch in range(40):
     # perfect is 1, worst is 0.5
     print("ROC AUC:", roc_auc_score(y_test, p_test))
 
-    # example output for dataset 3 after 40 epochs:
-    # Brier score: 0.028854428011338036
-    # Log loss: 0.09529701088378399
-    # ROC AUC: 0.9673378460055462
-    # -> very good!
+    # example output for dataset 3 after 50 epochs:
+    # Brier score: 0.029208642136701157
+    # Log loss: 0.09578933691123727
+    # ROC AUC: 0.9669857416782169
