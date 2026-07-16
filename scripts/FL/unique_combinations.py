@@ -1,7 +1,7 @@
 import pandas as pd
 from util.paths import DATASETS_DIR
 
-df = pd.read_csv(DATASETS_DIR / "FL/lv_heat_map_full_2.csv")
+df = pd.read_csv(DATASETS_DIR / "FL/lv_heat_map_full_3.csv")
 
 count = (
     df[df["is_lv"] == 1]

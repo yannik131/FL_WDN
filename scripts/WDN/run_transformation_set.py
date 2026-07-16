@@ -3,8 +3,9 @@ from util.paths import CONFIG_DIR, DATASETS_DIR
 from util.task import Task, execute_tasks, create_mapfile
 from itertools import product
 
-p_vals = [0, 0.01, 0.02, 0.03, 0.05, 0.08, 0.1, 0.15, 0.3, 0.5, 0.8, 0.9, 0.999]
-A0_vals = [0, 1, 2, 5, 10, 20, 40, 80, 160, 320, 640, 1000]
+# Reduced to ~288 scenarios (~5.7M samples total) for fast training on RTX 3070
+p_vals = [0.0, 0.1, 0.3, 0.5, 0.9]
+A0_vals = [0, 10, 80, 320]
 B0_vals = A0_vals.copy()
 
 mapping = {
@@ -17,7 +18,7 @@ mapping = {
 tasks = []
 i = 0
 for p, A0, B0 in product(p_vals, A0_vals, B0_vals):
-    for r in range(5):
+    for r in range(3):  # Reduced from 5 to 3 repetitions
         N = A0 + B0
         params = dict(
             filename=f"simple_transformation_set_2_{i:04d}.csv",
