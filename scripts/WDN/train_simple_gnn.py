@@ -15,7 +15,7 @@ from util.paths import DATASETS_DIR, RESULTS_DIR
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-MODEL_PATH = RESULTS_DIR / "WDN/simple_gnn_flux.pt"
+MODEL_PATH = RESULTS_DIR / "WDN/simple_gnn_transformation_3.pt"
 DATASET_PATH = DATASETS_DIR / "WDN/simple_transformation_data_flux.pt"
 
 
@@ -90,7 +90,7 @@ def load_dataset():
         logger.info(f"Loading dataset from {DATASET_PATH}")
         return torch.load(DATASET_PATH, weights_only=False)
 
-    mapping_file = DATASETS_DIR / "WDN/simple_transformation_set_2.csv"
+    mapping_file = DATASETS_DIR / "WDN/simple_transformation_set_3.csv"
     dataset = ReactionDataset(mapping_file)
 
     logger.info(f"Saving dataset to {DATASET_PATH}")
