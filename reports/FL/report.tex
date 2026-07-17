@@ -177,18 +177,20 @@ The goal of this project is to find the region of the six dimensional probabilit
 Find papers for "Does FedAvg create good models when clients see only a single class of the training dataset (like only negative results)?"
 
 \section{Methodology}
-The project consists of three parts. First, a LV-classifier was developed to label data. It was designed to be simple and fast enough to quickly label thousands of CSV-files with disc count trajectories. Second, a simple dataset where only $p_1$ and $p_2$ (see \cref{subsection_lv_dynamics}) were varied was created. The other four probabilities were fixed at values that are known to exhibit LV-dynamics. The resulting 2D probability space should give a first impression of whether the region of interest is closed or not. Third, a larger dataset spanning the entire 6D probability space was created. Three different models were trained with this data:
+The project consists of three parts. First, a LV-classifier was developed to label data. It was designed to be simple and fast enough to quickly label thousands of CSV-files with disc count trajectories. Second, a simple dataset where only $p_1$ and $p_2$ (see \cref{subsection_lv_dynamics}) were varied was created. The other four probabilities were fixed at values that are known to exhibit LV-dynamics. The resulting 2D probability space should give a first impression of whether the region of interest is closed or not. Third, a larger dataset spanning the entire 6D probability space was created. Two different model types were trained with this data:
 
 \begin{itemize}
-    \item A single baseline model using a traditional scikit-learn pipeline
-    \item A FL model using $N$ client splits by splitting the dataset
-    \item \begin{itemize}
+    \item A single baseline model using the entire dataset for training
+    \item $2N$ models with averaged weights obtained from $N$ client models by splitting the dataset
+    \begin{itemize}
         \item randomly
         \item into cohesive 6D regions
     \end{itemize}
 \end{itemize}
 
-All models were Multi Layer Perceptron (MLP) classifiers. MLPs work best if the decision boundaries are smooth and possibly nonlinear. A Support Vector Machine (SVM) or logistic regression are possible candidates in case of poor MLP model performance. Unless stated otherwise, any dataset for training was split 80/20 into train and test data. All MLPs used have an input node for each probability (up to six), two hidden layers with 64 nodes each, and a single output node. The chosen activation function is ReLU ($f(x) = \max(0, x)$), which is a sensible default for binary classification. The learning rate and weight decay remained at the default values of $0.001$ each. To avoid varying internal representations of the data, the training data was scaled to zero mean and unit variance. The same scaler was used to scale the test data as well and was only fitted using the training data. 
+All models were Multi Layer Perceptron (MLP) classifiers. With enough hidden units, MLPs can approximate complex multi-dimensional decision boundaries, needing relatively few parameters for the task in this project. In a FL setting, they require relatively low communication cost and train quickly on local clients. A Support Vector Machine (SVM) or logistic regression are possible candidates in case of poor MLP model performance. Unless stated otherwise, any dataset for training was split 80/20 into train and test data.
+
+All MLPs used have an input node for each probability (up to six), two hidden layers with 64 nodes each, and a single output node. The chosen activation function is ReLU ($f(x) = \max(0, x)$), which is a sensible default for binary classification. The learning rate and weight decay remained at the default values of $0.001$ each. To avoid varying internal representations of the data, the training data was scaled to zero mean and unit variance. The same scaler was used to scale the test data as well and was only fitted using the training data. 
 
 \subsection{Developing a LV-classifier}
 The definition of "LV-like dynamics" in the context of this project is mostly qualitative and refers to the following characteristics:
@@ -202,10 +204,10 @@ The definition of "LV-like dynamics" in the context of this project is mostly qu
 
 \insertfigure{figures/lv_good_bad.jpg}{LV classification of two prey-predator count trajectories. The smoothed curves were drawn on top of the original count trajectories. Trajectories are labeled as yes or no depending on how many peaks are found and if predator peaks lag behind prey preaks. Peaks are found using \texttt{scipy.signal.find\_peaks} and marked with dots.}{fig_lv_good_bad}
 
-To find the optimal parameters for the classifier, a 2D dataset was created by varying $p_1$ and $p_2$ in steps of 1\% with fixed other probabilities. Each simulation was run four times. The prominence was varied by viewing samples at the decision boundary and seeing if the LV dynamic was pronounced enough, i. e. the simulation showed clearly visible prey and predator population peaks. A comparison of the results using two different prominences is shown in \cref{fig_lv_prom_comp}.
+To find the optimal parameters for the classifier, a 2D dataset was created by varying $p_1$ and $p_2$ in steps of 1\% with fixed other probabilities. Each simulation was run five times. The prominence was varied by viewing samples at the decision boundary and seeing if the LV dynamic was pronounced enough, i. e. the simulation showed clearly visible prey and predator population peaks. A comparison of the results using two different prominences is shown in \cref{fig_lv_prom_comp}.
 
 \insertfigure{figures/simple_prom_comp.jpg}{Label frequencies assigned by the LV classifier to the 2D dataset for different values of the \texttt{prominence} parameter. A prominence of 50 for both prey and predator peaks yielded many positive results that showed only weak LV dynamics after reviewing. A prominence of 150 for prey and 120 for predator peaks showed a much smaller positive region with very few outliers.}{fig_lv_prom_comp}
-To predict how likely a given configuration is to result in LV-dynamics, a classifier for LV-dynamics first has to be defined.
+
 
 \subsection{Scoring methods}
 Performance of the models was judged by comparing 2D heatmaps of the decision boundary with simulated data and by calculating the ROC AUC, log loss and the brier score. As a shorthand, a \enquote{score} in the context of this project is a tuple of the form $(\text{ROC AUC}, \text{Log loss}, \text{Brier score})$. 
@@ -216,34 +218,33 @@ The receiver operating characteristic (ROC) is calculated by varying the positiv
 \insertfigure{figures/roc_auc.png}{Example diagram for the ROC curve from~\cite{wikipedia_roc}. The ROC curve is obtained by varying the decision threshold for labeling and plotting the true positive rate against the false positive rate. The area under the curve (AUC) is then used as the metric.}{fig_roc_auc}
 
 \subsubsection{Brier score}
-The brier score is the mean squared error:
+The \textit{brier score} is the mean squared error:
 
-\begin{equation}
+\begin{equation*}
     \text{Brier score} = \frac{1}{N}\sum_{i=1}^N (p_i - y_i)^2,
-\end{equation}
+\end{equation*}
 
 where $p_i \in [0, 1]$ are the predicted probabilities and $y_i \in \{0, 1\}$ are the true labels. The brier score measures the overall accuracy of the model, where a score of $0$ is best and $1$ is worst.
 
 \subsubsection{Log loss}
-The binary cross entropy log loss is calculated via 
+The binary cross entropy or \textit{log loss} is calculated via 
 
-\begin{equation}
+\begin{equation*}
     \text{Log loss} = -\frac{1}{N}\sum_{i=1}^N\left(y_i\log(p_i)+(1-y_i)\log(1-p_i)\right).
-\end{equation}
+\end{equation*}
 
 For $y_i = 0$, the summand contributes $\log(1-p_i)$, which grows large for $p_i \rightarrow 1$. For $y_i = 1$, the summand contributes $\log(p_i)$, which grows large for $p_i \rightarrow 0$. This means that the log loss particularly penalizes confident wrong predictions. The best score would be $0$ and the worst can be arbitrarily large.
 
 \subsection{Training a model on a 2D subspace}
-Using the 2D dataset where only $p_1$ and $p_2$ were varied, a simple MLP regression model was trained. Since each unique combination was simulated four times, it is important to group shuffle split the train and test datasets to avoid unique combinations to appear in both.
-Its decision boundary and the original LV classification results are compared in \cref{fig_simple_model_comp}.
+Using the 2D dataset where only $p_1$ and $p_2$ were varied, a simple MLP regression model with two input nodes was trained. Since each unique combination or \textit{group} was simulated five times, using group shuffling for the train and test datasetsto was necessary avoid unique combinations to appear in both. Otherwise, local clients could struggle to learn correct label probabilities. The decision boundary of this model and the original LV classification results are compared in \cref{fig_simple_model_comp}.
 
 \insertfigure{figures/simple_comp.jpg}{Comparison of empirically estimated and model-predicted probability landscapes on a fixed 100x100 grid.}{fig_simple_model_comp}
 
-The score of this model is $(0.984, 0.064, 0.019)$. Together with \cref{fig_simple_model_comp}, this indicates good performance. 
+The score of this model is $(0.984, 0.064, 0.019)$. Together with \cref{fig_simple_model_comp}, this indicates that the model can correctly predict how likely any given combination of $(p_1, p_2)$ will result in LV dynamics.
 
 \subsection{Training a model on the full 6D space}
-With the available CPUs for this project a total of about 100,000 simulations can be run in a day. For this dataset, 20,000 unique parameter vectors were run five times each.\\
-A first approach used latin hypercube sampling with $N = 20\,000$ across the whole 6D probability space. Latin hypercube sampling evenly divides each dimension into $N$ values and then randomly samples $N$ vectors from all possible $N^6$ combinations. For $p_i \in [0, 1]$ this resulted in less than five positive results, indicating a very small surface area of the interesting region in 6D space. To obtain a more targeted dataset, the viable range of $p_1 \in [0.1, 1]$ and $p_2 \in [0, 0.2]$ from \cref{fig_simple_model_comp} was used instead. $p_3$ through $p_6$ were fixed to $\pm 0.1$ within the value used for the runs that resulted in \cref{fig_simple_model_comp}. The targeted dataset was created using latin hypercube sampling with subsequent scaling to the bounds. This dataset resulted in a total of about 5,000 positive hits with about 2,200 ($\approx 10\%$) unique probability vectors. Again, a MLP model, this time with six instead of two input nodes, was trained on the full dataset and also tested on the dataset from \cref{fig_simple_model_comp}. The results are shown in \cref{fig_full_model_comp_1}.
+With the available CPUs for this project a total of about 100,000 simulations could be run in a day. For this dataset, 20,000 unique parameter vectors were run five times each.\\
+A first approach used latin hypercube sampling with $N = 20\,000$ across the whole 6D probability space. Latin hypercube sampling divides each dimension into $N$ equally sized intervals and generates $N$ samples such that each interval occurs exactly once in every dimension. For $p_i \in [0, 1]$ this resulted in less than five positive results, indicating a very small surface area of the interesting region in 6D space. To obtain a more targeted dataset, the viable range of $p_1 \in [0.1, 1]$ and $p_2 \in [0, 0.2]$ from \cref{fig_simple_model_comp} was used instead. $p_3$ through $p_6$ were fixed to $\pm 0.1$ (clamped to $[0, 1]$) within the value used for the runs that resulted in \cref{fig_simple_model_comp}. The targeted dataset was created using latin hypercube sampling with subsequent scaling to the bounds. This dataset resulted in a total of about 5,000 positive hits with about 2,200 ($\approx 10\%$) unique probability vectors. Again, a MLP model, this time with six instead of two input nodes, was trained on the full dataset and also tested on the dataset from \cref{fig_simple_model_comp}. The results are shown in \cref{fig_full_model_comp_1}.
 
 \insertfigure{figures/full_comp.jpg}{Comparison of empirically estimated and model-predicted probability landscapes on a fixed 100x100 grid. The training dataset only contained values for $p_1 \in [0.1, 1]$ and the model didn't learn the correct distribution for $p_1 \in [0, 0.1]$.}{fig_full_model_comp_1}
 
@@ -259,10 +260,10 @@ Since the dataset is already fully available, federated learning was simulated b
 \begin{enumerate}
     \item The server is initialized with the global model weights $w_t$
     \item These weights are sent to each participating client 
-    \item Each client trains locally for a small number of epochs 
+    \item Each client trains locally for five of epochs 
     \item Each client then returns the updated weights to the server 
     \item The server computes a weighted average of the weights
-    \item Repeat from step 2. until the desired number of epochs is reached
+    \item Repeat from step 2. ten times to have 50 epochs in total
 \end{enumerate}
 
 The dataset was split either via a stratified shuffled group split or uniformly along the $p_1$ axis to examine the impact of identically and indepently distributed (IID) data versus non-IID data. Stratification ensures that all clients get roughly the same number of positive and negative labels. Since each 6D input vector corresponds to five simulation runs, a client should always see all five runs to be able to learn a meaningful probability. This is why all five runs were grouped together and the groups were then distributed across the clients. Additionally, the number of clients were varied. \\
@@ -270,33 +271,7 @@ The scores as a function of the number of clients are shown in \cref{fig_scores_
 
 \insertfigure{figures/scores_comp.jpg}{ROC AUC, brier score and log loss as a function of the number of client splits for models trained on either the IID (random) or non-IID (cohesive) dataset splits. The scores degrade with increasing number of clients. The models trained on the IID data perform consistently better than the ones trained on non-IID data.}{fig_scores_comp}
 
-\subsection{Training a model}
-
-\begin{enumerate}
-    \item df has columns \texttt{p1, p2, ..., is\_lv}
-    \item X has columns \texttt{p1, p2, ..., p6}
-    \item y has columns \texttt{is\_lv}
-    \item \texttt{X\_train} and X\_test are a 80/20 random subset split of X
-    \item y\_train, y\_test are a 80/20 random subset split of y. With \texttt{stratify=y} the ratio of true to false classes (which was about 3,000/100,000 = 3\%) is kept in y\_train and y\_test
-    \item StandardScaler transforms X\_train to 0 mean and standard variance (1)
-    \item It is fitted to the values from the training dataset and uses these to transform the test dataset. This avoids the test dataset to be too similar to the train dataset.
-    \item X and y are split into N random subsets (cohesive regions would mostly contain 0's since there are so few 1's in the dataset)
-    \item each client split contains the same number of 0 and 1 results, indices are random shuffled to avoid any regularity coming from original
-\end{enumerate}
-
 \section{Results}
-Train models with
-\begin{itemize}
-    \item N\_CLIENTS=1,2,4,8,16
-    \item stratified group shuffled k fold split
-    \item cohesive $p_1$ split
-\end{itemize}
-
-Review/compare with baseline
-\begin{itemize}
-    \item ROC AUC, log loss, brier: plot against N\_CLIENTS, baseline as dashed hline
-    \item $(p_1, p_2)$ heatmap with simple dataset
-\end{itemize}
 
 Also review 6 slices/heatmaps against p1.
 
