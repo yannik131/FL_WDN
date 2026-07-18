@@ -119,8 +119,10 @@ for row in scores_df.itertuples():
     set_ticks(axes[0], len(pivot.columns))
     set_ticks(axes[1], len(pivot_model.columns))
 
-    plt.savefig(DATASETS_DIR / f"FL/fl_comp_plots/fl_rand_comp_{n_clients}_{split_random}.jpg", dpi=300)
+    # plt.savefig(DATASETS_DIR / f"FL/fl_comp_plots/fl_rand_comp_{n_clients}_{split_random}.jpg", dpi=300)
     plt.close()
 
+    print(f"N = {n_clients}, split_random = {split_random}")
     unique_probs = np.sort(grid_model["lv_prob_model"].round(2).unique())
     print(unique_probs)
+    input()
