@@ -12,6 +12,12 @@ from tqdm import tqdm
 
 from util.paths import DATASETS_DIR, RESULTS_DIR
 
+"""
+In this simple first approach we model a single reaction A -> B with a simple graph:
+A -> B
+where the reaction probability is an edge attribute of the edge (A, B). 
+"""
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -34,17 +40,17 @@ def resample_counts(df, dt=0.05):
 
 def create_graph(A, B, p):
     x = torch.tensor([
-        [float(A)],
-        [float(B)],
+        [float(A)], # source nodes
+        [float(B)], # target nodes
     ], dtype=torch.float)
 
     edge_index = torch.tensor([
-        [0],
-        [1],
+        [0], # all source node indices
+        [1], # corresponding target node indices
     ], dtype=torch.long)
 
     edge_attr = torch.tensor([
-        [float(p)]
+        [float(p)] # attribute for first edge
     ], dtype=torch.float)
 
     return Data(
@@ -70,6 +76,12 @@ class ReactionDataset(Dataset):
             A = df["A"]
             B = df["B"]
 
+            """
+            node features:
+                x              y
+            A:  [A(t)]      -> [A(t+dt)]
+            B:  [B(t)]      -> [B(t+dt)]
+            """
             for i in range(len(df) - 1):
                 graph = create_graph(A.iloc[i], B.iloc[i], p)
                 graph.y = torch.tensor([
@@ -112,24 +124,30 @@ class ReactionGNN(nn.Module):
         )
 
     def forward(self, data):
-        x = data.x                   # [num_nodes, 1]
-        src, dst = data.edge_index   # [num_edges], [num_edges]
+        x = data.x                   # [ [A], [B] ]: Counts for each node
+        src, dst = data.edge_index   # [ [0], [1] ]: Single edge from A to B
 
+        # we get [ [source_counts], [target_counts], p]
         edge_input = torch.cat([
             x[src] / self.max_count,
             x[dst] / self.max_count,
             data.edge_attr
         ], dim=-1)
 
-        frac = torch.sigmoid(self.edge_mlp(edge_input))   # [num_edges, 1], in [0, 1]
-        flux = frac * data.edge_attr * x[src]             # [num_edges, 1]
+        frac = torch.sigmoid(self.edge_mlp(edge_input))   # let mlp predict fraction between 0 and 1
+        # calculate how much A we lose and how much B we gain
+        # we multiply with p (= data.edge_attr)
+        flux = frac * data.edge_attr * x[src]             # 
 
         incoming = torch.zeros_like(x)
         outgoing = torch.zeros_like(x)
 
+        # dst = [1], so incoming = [[0.0], [flux]]
         incoming.index_add_(0, dst, flux)
+        # src = [0], so outgoing = [[flux], [0.0]]
         outgoing.index_add_(0, src, flux)
 
+        # add changes to current counts
         x_next = x - outgoing + incoming
         return x_next
 
