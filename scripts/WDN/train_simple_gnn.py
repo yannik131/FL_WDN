@@ -22,7 +22,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 MODEL_PATH = RESULTS_DIR / "WDN/simple_gnn_transformation_3.pt"
-DATASET_PATH = DATASETS_DIR / "WDN/simple_transformation_data_flux.pt"
+DATASET_PATH = DATASETS_DIR / "WDN/simple_transformation_data_flux_3.pt"
 
 
 def resample_counts(df, dt=0.05):
@@ -34,6 +34,10 @@ def resample_counts(df, dt=0.05):
     df_interp = pd.DataFrame({time_col: new_time})
     for col in count_cols:
         df_interp[col] = np.interp(new_time, x, df[col].to_numpy())
+
+    N = df_interp.loc[0, count_cols].sum()
+    if N > 0:
+        df_interp[count_cols] /= N
 
     return df_interp
 
@@ -73,6 +77,9 @@ class ReactionDataset(Dataset):
             df = pd.read_csv(DATASETS_DIR / "WDN/simple_transformation_set_3" / filename)
             df = resample_counts(df)
 
+            if df.isna().any().any():
+                print(filename, "resulted in nan")
+
             A = df["A"]
             B = df["B"]
 
@@ -111,9 +118,8 @@ def load_dataset():
 
 
 class ReactionGNN(nn.Module):
-    def __init__(self, max_count=320.0):
+    def __init__(self):
         super().__init__()
-        self.max_count = max_count
 
         self.edge_mlp = nn.Sequential(
             nn.Linear(3, 64),   # [source_count, target_count, p]
@@ -124,27 +130,43 @@ class ReactionGNN(nn.Module):
         )
 
     def forward(self, data):
+        """
+        With batch_size=32 we will have the following shapes:
+        - data.x: [ [A1], [B1], [A2], [B2], ..., [A32], [B32] ]: 32 values for each species count
+        - data.edge_index: [ [0, 2, ..., 62 ], [1, 3, ..., 63] ]: Total of 64 values mapping to data.x left side (A) and right side (B)
+        - data.edge_attr: [ [p1], [p2], ..., [p32] ]: 32 values of p
+        """
         x = data.x                   # [ [A], [B] ]: Counts for each node
         src, dst = data.edge_index   # [ [0], [1] ]: Single edge from A to B
+        p = data.edge_attr
 
         # we get [ [source_counts], [target_counts], p]
         edge_input = torch.cat([
-            x[src] / self.max_count,
-            x[dst] / self.max_count,
-            data.edge_attr
+            x[src],
+            x[dst],
+            p
         ], dim=-1)
 
         frac = torch.sigmoid(self.edge_mlp(edge_input))   # let mlp predict fraction between 0 and 1
         # calculate how much A we lose and how much B we gain
-        # we multiply with p (= data.edge_attr)
-        flux = frac * data.edge_attr * x[src]             # 
+        # the LLM wrote code that multiplied with p but that doesn't make sense for dt > 1 for example
+
+        # for all cases of p being 1 or 0 set flux to x[src] (all transform) or 0, otherwise flux is just 
+        # frac * x[src]
+        flux = torch.where(
+            p == 0,
+            torch.zeros_like(x[src]),
+            torch.where(
+                p == 1,
+                x[src],
+                frac * x[src]
+            )
+        )
 
         incoming = torch.zeros_like(x)
         outgoing = torch.zeros_like(x)
 
-        # dst = [1], so incoming = [[0.0], [flux]]
         incoming.index_add_(0, dst, flux)
-        # src = [0], so outgoing = [[flux], [0.0]]
         outgoing.index_add_(0, src, flux)
 
         # add changes to current counts
@@ -152,7 +174,7 @@ class ReactionGNN(nn.Module):
         return x_next
 
 
-def train(device="cpu", epochs=200):
+def train(device="cpu", epochs=None):
     dataset = load_dataset()
     loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
@@ -178,7 +200,7 @@ def train(device="cpu", epochs=200):
             total_loss += loss.item()
 
         avg_loss = total_loss / len(loader)
-        print(f"Epoch {epoch + 1}/{epochs}: loss={avg_loss:.6f}")
+        print(f"Epoch {epoch + 1}/{epochs}: loss={avg_loss:.6g}")
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), MODEL_PATH)
@@ -222,19 +244,19 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if not MODEL_PATH.exists():
-        train(device=device, epochs=40)
+        train(device=device, epochs=5)
     
-    """
     model = load_model(device)
 
-    A0 = 750
-    B0 = 144
+    A0 = 320
+    B0 = 80
+    N = A0 + B0
     p = 0.05
 
     trajectory = predict_trajectory(
         model=model,
-        A0=A0,
-        B0=B0,
+        A0=A0 / N,
+        B0=B0 / N,
         p=p,
         steps=int(60 / 0.05),
         dt=0.05,
@@ -242,11 +264,10 @@ if __name__ == "__main__":
     )
     trajectory = np.array(trajectory)
 
-    plt.plot(trajectory[:, 0], trajectory[:, 1], label="A")
-    plt.plot(trajectory[:, 0], trajectory[:, 2], label="B")
+    plt.plot(trajectory[:, 0], trajectory[:, 1] * N, label="A")
+    plt.plot(trajectory[:, 0], trajectory[:, 2] * N, label="B")
     plt.xlabel("Time")
     plt.ylabel("Count")
     plt.legend()
     plt.tight_layout()
     plt.show()
-    """
