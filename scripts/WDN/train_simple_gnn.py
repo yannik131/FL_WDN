@@ -18,6 +18,12 @@ A -> B
 where the reaction probability is an edge attribute of the edge (A, B). 
 """
 
+
+"""
+task:
+compare prediction with analytical solution and averaged 100 runs and compare intersection time with 100 time histogram
+"""
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -68,6 +74,7 @@ class ReactionDataset(Dataset):
     def __init__(self, mapping_file):
         super().__init__()
         self.samples = []
+        rollout_steps = 20
 
         mapping = pd.read_csv(mapping_file)
         for row in tqdm(mapping.itertuples(index=False), total=len(mapping)):
@@ -86,14 +93,14 @@ class ReactionDataset(Dataset):
             """
             node features:
                 x              y
-            A:  [A(t)]      -> [A(t+dt)]
-            B:  [B(t)]      -> [B(t+dt)]
+            A:  [A(t)]      -> [A(t+dt), A(t+2*dt), ..., A(t+rollout_steps*dt)]
+            B:  [B(t)]      -> [B(t+dt), B(t+2*dt), ..., B(t+rollout_steps*dt)]
             """
-            for i in range(len(df) - 1):
+            for i in range(len(df) - rollout_steps):
                 graph = create_graph(A.iloc[i], B.iloc[i], p)
                 graph.y = torch.tensor([
-                    [float(A.iloc[i + 1])],
-                    [float(B.iloc[i + 1])],
+                    A.iloc[i + 1:i + rollout_steps + 1].to_numpy(),
+                    B.iloc[i + 1:i + rollout_steps + 1].to_numpy()
                 ], dtype=torch.float)
                 self.samples.append(graph)
 
@@ -153,15 +160,7 @@ class ReactionGNN(nn.Module):
 
         # for all cases of p being 1 or 0 set flux to x[src] (all transform) or 0, otherwise flux is just 
         # frac * x[src]
-        flux = torch.where(
-            p == 0,
-            torch.zeros_like(x[src]),
-            torch.where(
-                p == 1,
-                x[src],
-                frac * x[src]
-            )
-        )
+        flux = frac * p * x[src]
 
         incoming = torch.zeros_like(x)
         outgoing = torch.zeros_like(x)
@@ -190,10 +189,17 @@ def train(device="cpu", epochs=None):
 
         for batch in tqdm(loader, leave=False):
             batch = batch.to(device)
-
             optimizer.zero_grad()
-            pred = model(batch)
-            loss = loss_fn(pred, batch.y)
+
+            state = batch.x 
+            loss = 0.0
+            for step in range(20):
+                batch.x = state 
+                state = model(batch)
+                target = batch.y[:, step:step + 1]
+                loss = loss + loss_fn(state, target)
+
+            loss /= 20
             loss.backward()
             optimizer.step()
 
@@ -271,3 +277,4 @@ if __name__ == "__main__":
     plt.legend()
     plt.tight_layout()
     plt.show()
+    
