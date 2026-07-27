@@ -58,11 +58,16 @@ class Task:
 
         return out
 
-def create_mapfile(tasks, path):
+def create_mapfile(tasks, path, header_mapping=None):
     # requires all tasks to have the same parameters
     task = tasks[0]
+    headers = task.params.keys()
+
+    if header_mapping is not None:
+        headers = [header_mapping.get(header, header) for header in headers]
+    
     with open(path, "w") as f:
-        f.write("filename," + ",".join(task.params.keys()) + ",r\n")
+        f.write("filename," + ",".join(headers) + ",r\n")
         for task in tasks:
             f.write(f"{task.filename}," + ",".join(fmt(v) for v in task.params.values()) + f",{task.r}\n")
 

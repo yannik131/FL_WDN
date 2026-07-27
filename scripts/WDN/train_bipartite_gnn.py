@@ -12,17 +12,11 @@ from tqdm import tqdm
 
 from util.paths import DATASETS_DIR, RESULTS_DIR
 
-"""
-In this simple first approach we model a single reaction A -> B with a simple graph:
-A -> B
-where the reaction probability is an edge attribute of the edge (A, B). 
-"""
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-MODEL_PATH = RESULTS_DIR / "WDN/simple_gnn_transformation_3.pt"
-DATASET_PATH = DATASETS_DIR / "WDN/simple_transformation_data_flux_3.pt"
+MODEL_PATH = RESULTS_DIR / "WDN/trans_comp_gnn.pt"
+DATASET_PATH = DATASETS_DIR / "WDN/trans_comp_1.pt"
 
 
 def resample_counts(df, dt=0.05):
@@ -35,32 +29,45 @@ def resample_counts(df, dt=0.05):
     for col in count_cols:
         df_interp[col] = np.interp(new_time, x, df[col].to_numpy())
 
-    N = df_interp.loc[0, count_cols].sum()
-    if N > 0:
-        df_interp[count_cols] /= N
-
     return df_interp
 
 
-def create_graph(A, B, p):
+def create_graph(A, B, C, N0, p_trans, p_comb):
+    # [current_count, initial_total, is_reaction, prob]
     x = torch.tensor([
-        [float(A)], # source nodes
-        [float(B)], # target nodes
+        [float(A), float(N0), 0, 0],
+        [float(B), float(N0), 0, 0],
+        [float(C), float(N0), 0, 0],
+        [0, float(N0), 1, p_trans],
+        [0, float(N0), 1, p_comb]
     ], dtype=torch.float)
 
-    edge_index = torch.tensor([
-        [0], # all source node indices
-        [1], # corresponding target node indices
+    educt_edge_index = torch.tensor([
+        [0, 0, 1],
+        [3, 4, 4]
     ], dtype=torch.long)
-
-    edge_attr = torch.tensor([
-        [float(p)] # attribute for first edge
+    educt_stoich = torch.tensor([
+        [1],
+        [1],
+        [1],
     ], dtype=torch.float)
 
+    product_edge_index = torch.tensor([
+        [3, 4],
+        [1, 2]
+    ], dtype=torch.float)
+    product_stoich = torch.tensor([
+        [1],
+        [1]
+    ], dtype=torch.float)
+    
     return Data(
         x=x,
-        edge_index=edge_index,
-        edge_attr=edge_attr
+        educt_edge_index=educt_edge_index,
+        educt_stoich=educt_stoich,
+        product_edge_index=product_edge_index,
+        product_stoich=product_stoich,
+        species_mask=torch.tensor([True, True, True, False, False])
     )
 
 
@@ -69,13 +76,15 @@ class ReactionDataset(Dataset):
         super().__init__()
         self.samples = []
         rollout_steps = 20
-
         mapping = pd.read_csv(mapping_file)
-        for row in tqdm(mapping.itertuples(index=False), total=len(mapping)):
-            filename = row[0]
-            p = row[1]
 
-            df = pd.read_csv(DATASETS_DIR / "WDN/simple_transformation_set_3" / filename)
+        for row in tqdm(mapping.iterrows(), total=len(mapping)):
+            filename = row["filename"]
+            N0 = float(row["N"])
+            p_trans = float(row["A->B"])
+            p_comb = float(row["A+B->C"])
+
+            df = pd.read_csv(DATASETS_DIR / "WDN/trans_comp_set_1" / filename)
             df = resample_counts(df)
 
             if df.isna().any().any():
@@ -83,6 +92,7 @@ class ReactionDataset(Dataset):
 
             A = df["A"]
             B = df["B"]
+            C = df["C"]
 
             """
             node features:
@@ -91,10 +101,11 @@ class ReactionDataset(Dataset):
             B:  [B(t)]      -> [B(t+dt), B(t+2*dt), ..., B(t+rollout_steps*dt)]
             """
             for i in range(len(df) - rollout_steps):
-                graph = create_graph(A.iloc[i], B.iloc[i], p)
+                graph = create_graph(A.iloc[i], B.iloc[i], C.iloc[i], N0, p_trans, p_comb)
                 graph.y = torch.tensor([
                     A.iloc[i + 1:i + rollout_steps + 1].to_numpy(),
-                    B.iloc[i + 1:i + rollout_steps + 1].to_numpy()
+                    B.iloc[i + 1:i + rollout_steps + 1].to_numpy(),
+                    C.iloc[i + 1:i + rollout_steps + 1].to_numpy() 
                 ], dtype=torch.float)
                 self.samples.append(graph)
 
