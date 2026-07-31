@@ -16,8 +16,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 MODEL_PATH = RESULTS_DIR / "WDN/trans_comp_gnn.pt"
-DATASET_PATH = DATASETS_DIR / "WDN/trans_comp_1.pt"
-
+DATASET_PATH = DATASETS_DIR / "WDN/trans_comp_set_1.pt"
 
 def resample_counts(df, dt=0.05):
     time_col = "ElapsedTime[s]"
@@ -60,7 +59,7 @@ def create_graph(A, B, C, N0, p_trans, p_comb):
         [1],
         [1]
     ], dtype=torch.float)
-    
+
     return Data(
         x=x,
         educt_edge_index=educt_edge_index,
@@ -78,7 +77,7 @@ class ReactionDataset(Dataset):
         rollout_steps = 20
         mapping = pd.read_csv(mapping_file)
 
-        for row in tqdm(mapping.iterrows(), total=len(mapping)):
+        for _, row in tqdm(mapping.iterrows(), total=len(mapping)):
             filename = row["filename"]
             N0 = float(row["N"])
             p_trans = float(row["A->B"])
@@ -105,7 +104,7 @@ class ReactionDataset(Dataset):
                 graph.y = torch.tensor([
                     A.iloc[i + 1:i + rollout_steps + 1].to_numpy(),
                     B.iloc[i + 1:i + rollout_steps + 1].to_numpy(),
-                    C.iloc[i + 1:i + rollout_steps + 1].to_numpy() 
+                    C.iloc[i + 1:i + rollout_steps + 1].to_numpy()
                 ], dtype=torch.float)
                 self.samples.append(graph)
 
@@ -121,7 +120,7 @@ def load_dataset():
         logger.info(f"Loading dataset from {DATASET_PATH}")
         return torch.load(DATASET_PATH, weights_only=False)
 
-    mapping_file = DATASETS_DIR / "WDN/simple_transformation_set_3.csv"
+    mapping_file = DATASETS_DIR / "WDN/trans_comp_set_1.csv"
     dataset = ReactionDataset(mapping_file)
 
     logger.info(f"Saving dataset to {DATASET_PATH}")
@@ -133,50 +132,151 @@ class ReactionGNN(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.edge_mlp = nn.Sequential(
-            nn.Linear(3, 64),   # [source_count, target_count, p]
+        # Message from a reactant species to a reaction node:
+        # [available reactant count, initial N, reaction probability, stoichiometry]
+        self.reactant_message = nn.Sequential(
+            nn.Linear(4, 64),
             nn.ReLU(),
             nn.Linear(64, 64),
             nn.ReLU(),
-            nn.Linear(64, 1)
         )
 
-    def forward(self, data):
-        """
-        With batch_size=32 we will have the following shapes:
-        - data.x: [ [A1], [B1], [A2], [B2], ..., [A32], [B32] ]: 32 values for each species count
-        - data.edge_index: [ [0, 2, ..., 62 ], [1, 3, ..., 63] ]: Total of 64 values mapping to data.x left side (A) and right side (B)
-        - data.edge_attr: [ [p1], [p2], ..., [p32] ]: 32 values of p
-        """
-        x = data.x                   # [ [A], [B] ]: Counts for each node
-        src, dst = data.edge_index   # [ [0], [1] ]: Single edge from A to B
-        p = data.edge_attr
+        # Predict the fraction of the currently possible reaction extent.
+        self.extent_mlp = nn.Sequential(
+            nn.Linear(64 + 2, 64),  # aggregated messages, N0, p
+            nn.ReLU(),
+            nn.Linear(64, 1),
+        )
 
-        # we get [ [source_counts], [target_counts], p]
-        edge_input = torch.cat([
-            x[src],
-            x[dst],
-            p
+    def forward(self, data, current_species_counts):
+        """
+        Args:
+            data: Batched PyG graph.
+            current_species_counts: [number_of_species_nodes_in_batch, 1].
+
+        Returns:
+            Next absolute counts for species nodes only:
+            [number_of_species_nodes_in_batch, 1].
+        """
+        species_mask = data.species_mask
+        num_nodes = data.num_nodes
+        device = data.x.device
+
+        # Insert the rolling species state into graph node features.
+        current_counts = data.x[:, 0:1].clone()
+        current_counts[species_mask] = current_species_counts
+
+        react_src, react_dst = data.reactant_edge_index
+        react_stoich = data.reactant_stoich
+
+        product_src, product_dst = data.product_edge_index
+        product_stoich = data.product_stoich
+
+        N0 = data.x[:, 1:2]
+        reaction_p = data.x[:, 3:4]
+
+        # For A + B -> C, each reaction can occur at most min(A, B).
+        available_per_edge = current_counts[react_src] / react_stoich
+
+        reactant_input = torch.cat([
+            available_per_edge,
+            N0[react_src],
+            reaction_p[react_dst],
+            react_stoich,
         ], dim=-1)
 
-        frac = torch.sigmoid(self.edge_mlp(edge_input))   # let mlp predict fraction between 0 and 1
-        # calculate how much A we lose and how much B we gain
-        # the LLM wrote code that multiplied with p but that doesn't make sense for dt > 1 for example
+        messages = self.reactant_message(reactant_input)
 
-        # for all cases of p being 1 or 0 set flux to x[src] (all transform) or 0, otherwise flux is just 
-        # frac * x[src]
-        flux = frac * p * x[src]
+        # Aggregate reactant messages at each reaction node.
+        aggregated = torch.zeros(
+            (num_nodes, messages.size(-1)),
+            device=device,
+            dtype=messages.dtype,
+        )
+        aggregated.index_add_(0, react_dst, messages)
 
-        incoming = torch.zeros_like(x)
-        outgoing = torch.zeros_like(x)
+        degree = torch.zeros((num_nodes, 1), device=device)
+        degree.index_add_(
+            0,
+            react_dst,
+            torch.ones((react_dst.numel(), 1), device=device),
+        )
+        aggregated = aggregated / degree.clamp_min(1.0)
 
-        incoming.index_add_(0, dst, flux)
-        outgoing.index_add_(0, src, flux)
+        # Limiting reagent: min(count / stoichiometry) over reactants.
+        limiting_amount = torch.full(
+            (num_nodes, 1),
+            float("inf"),
+            device=device,
+        )
+        limiting_amount.scatter_reduce_(
+            0,
+            react_dst.unsqueeze(-1),
+            available_per_edge,
+            reduce="amin",
+            include_self=True,
+        )
 
-        # add changes to current counts
-        x_next = x - outgoing + incoming
-        return x_next
+        reaction_nodes = ~species_mask
+        limiting_amount[~reaction_nodes] = 0.0
+        limiting_amount[torch.isinf(limiting_amount)] = 0.0
 
+        extent_input = torch.cat([
+            aggregated,
+            N0,
+            reaction_p,
+        ], dim=-1)
+
+        # One non-negative extent per reaction node.
+        reaction_extent = (
+            torch.sigmoid(self.extent_mlp(extent_input))
+            * reaction_p
+            * limiting_amount
+        )
+        reaction_extent[~reaction_nodes] = 0.0
+
+        # If reactions share a reactant, do not consume more particles than exist.
+        provisional_demand = torch.zeros((num_nodes, 1), device=device)
+        provisional_demand.index_add_(
+            0,
+            react_src,
+            react_stoich * reaction_extent[react_dst],
+        )
+
+        species_scale = torch.ones((num_nodes, 1), device=device)
+        has_demand = provisional_demand > 0
+        species_scale[has_demand] = torch.minimum(
+            torch.ones_like(current_counts[has_demand]),
+            current_counts[has_demand] / provisional_demand[has_demand],
+        )
+
+        reaction_scale = torch.ones((num_nodes, 1), device=device)
+        reaction_scale.scatter_reduce_(
+            0,
+            react_dst.unsqueeze(-1),
+            species_scale[react_src],
+            reduce="amin",
+            include_self=True,
+        )
+        reaction_extent = reaction_extent * reaction_scale
+
+        # Apply stoichiometric losses and gains.
+        outgoing = torch.zeros((num_nodes, 1), device=device)
+        outgoing.index_add_(
+            0,
+            react_src,
+            react_stoich * reaction_extent[react_dst],
+        )
+
+        incoming = torch.zeros((num_nodes, 1), device=device)
+        incoming.index_add_(
+            0,
+            product_dst,
+            product_stoich * reaction_extent[product_src],
+        )
+
+        next_counts = (current_counts - outgoing + incoming).clamp_min(0.0)
+        return next_counts[species_mask]
 
 def train(device="cpu", epochs=None):
     dataset = load_dataset()
@@ -196,11 +296,11 @@ def train(device="cpu", epochs=None):
             batch = batch.to(device)
             optimizer.zero_grad()
 
-            state = batch.x 
+            state = batch.x[batch.species_mask, 0:1]
             loss = 0.0
+
             for step in range(20):
-                batch.x = state 
-                state = model(batch)
+                state = model(batch, state)
                 target = batch.y[:, step:step + 1]
                 loss = loss + loss_fn(state, target)
 
@@ -209,6 +309,7 @@ def train(device="cpu", epochs=None):
             optimizer.step()
 
             total_loss += loss.item()
+
 
         avg_loss = total_loss / len(loader)
         print(f"Epoch {epoch + 1}/{epochs}: loss={avg_loss:.6g}")
@@ -226,60 +327,96 @@ def load_model(device="cpu"):
     return model
 
 
-def predict_next_step(model, A, B, p, device="cpu"):
-    graph = create_graph(A, B, p).to(device)
+def predict_next_step(model, A, B, C, N0, p_a_to_b, p_a_b_to_c, device="cpu"):
+    graph = create_graph(
+        A=A,
+        B=B,
+        C=C,
+        N0=N0,
+        p_a_to_b=p_a_to_b,
+        p_a_b_to_c=p_a_b_to_c,
+    ).to(device)
 
     with torch.no_grad():
-        pred = model(graph).squeeze(-1)
-        A_next, B_next = pred.cpu().tolist()
+        state = graph.x[graph.species_mask, 0:1]
+        pred = model(graph, state).squeeze(-1)
 
-    return A_next, B_next
+    return pred.cpu().tolist()
 
-
-def predict_trajectory(model, A0, B0, p, steps, dt=0.05, device="cpu"):
+def predict_trajectory(
+    model,
+    A0,
+    B0,
+    C0,
+    p_trans,
+    p_comb,
+    steps,
+    dt=0.05,
+    device="cpu",
+):
     A = float(A0)
     B = float(B0)
-    trajectory = [(0.0, A, B)]
+    C = float(C0)
+    N0 = A + B + C
+
+    trajectory = [(0.0, A, B, C)]
 
     with torch.no_grad():
         for step in range(1, steps + 1):
-            graph = create_graph(A, B, p).to(device)
-            pred = model(graph).squeeze(-1)
-            A, B = pred.cpu().tolist()
-            trajectory.append((step * dt, A, B))
+            graph = create_graph(
+                A=A,
+                B=B,
+                C=C,
+                N0=N0,
+                p_a_to_b=p_trans,
+                p_a_b_to_c=p_comb,
+            ).to(device)
+
+            state = graph.x[graph.species_mask, 0:1]
+
+            # Returns counts for species nodes [A, B, C].
+            pred = model(graph, state).squeeze(-1)
+            A, B, C = pred.cpu().tolist()
+
+            trajectory.append((step * dt, A, B, C))
 
     return trajectory
-
 
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if not MODEL_PATH.exists():
         train(device=device, epochs=5)
-    
+
     model = load_model(device)
 
     A0 = 320
     B0 = 80
-    N = A0 + B0
-    p = 0.05
+    C0 = 0
+
+    p_trans = 0.05  # A -> B
+    p_comb = 0.02   # A + B -> C
 
     trajectory = predict_trajectory(
         model=model,
-        A0=A0 / N,
-        B0=B0 / N,
-        p=p,
+        A0=A0,
+        B0=B0,
+        C0=C0,
+        p_trans=p_trans,
+        p_comb=p_comb,
         steps=int(60 / 0.05),
         dt=0.05,
-        device=device
+        device=device,
     )
-    trajectory = np.array(trajectory)
+    trajectory = np.asarray(trajectory)
 
-    plt.plot(trajectory[:, 0], trajectory[:, 1] * N, label="A")
-    plt.plot(trajectory[:, 0], trajectory[:, 2] * N, label="B")
-    plt.xlabel("Time")
-    plt.ylabel("Count")
+    plt.plot(trajectory[:, 0], trajectory[:, 1], label="A")
+    plt.plot(trajectory[:, 0], trajectory[:, 2], label="B")
+    plt.plot(trajectory[:, 0], trajectory[:, 3], label="C")
+
+    plt.xlabel("Time [s]")
+    plt.ylabel("Particle count")
     plt.legend()
     plt.tight_layout()
     plt.show()
-    
+

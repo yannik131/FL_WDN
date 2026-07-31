@@ -112,7 +112,7 @@ The standard deviation is calculated using the user-defined most probable speed 
 \end{equation*}
 
 \subsubsection*{Disc types}
-Every disc in the simulation has a user-defined \textit{disc type}. Each disc type has a name, a mass $m$ and a radius $r$. With the GUI, the user can also associate a color to each disc type which is used to color discs in the simulation and plot widgets. We will call the set of disc types $D$.
+Every disc in the simulation has a user-defined \textit{disc type}. Each disc type has a name, a dimensionless mass $m$ and a radius in px $r$, represented in short as a tuple $(\text{name}, m, r)$. With the GUI, the user can also associate a color to each disc type which is used to color discs in the simulation and plot widgets. We will call the set of disc types $D$.
 
 \subsubsection*{Reactions}
 Two categories of reactions are supported: Unimolecular reactions with time-based probabilities and bimolecular reactions with collision-based probabilities. The simulation supports four kinds of reactions. In the context of this project, only the following two kinds are relevant.
@@ -135,7 +135,7 @@ The reaction probability $p$ is given as a probability for the reaction after ea
 The set of all reactions and their probabilities will be called $\Omega$.
 
 \subsubsection*{Simulation size and distribution}
-The simulation boundaries are a circle of radius $R$ with a total disc count of $N$. Using the largest disc type radius $r_{\text{max}}$ in the configuration for the edge length, $N$ discs are distributed across a uniform grid. Initial disc counts are specified using a disc type distribution $f$, which assigns relative frequencies to each disc type. Note that depending on $R$, the grid might not fit the requested $N$ discs.
+The simulation boundaries are a circle of radius $R$ with a total disc count of $N$. Using the largest disc type radius $r_{\text{max}}$ in the configuration for the edge length $l = r_{\text{max}} + 1$, $N$ discs are distributed across a uniform grid. Initial disc counts are specified using a disc type distribution $f$, which assigns relative frequencies to each disc type. Note that depending on $R$, the grid might not fit the requested $N$ discs.
 
 \subsubsection*{The configuration}
 With the above notation, each simulation configuration is a vector
@@ -144,11 +144,17 @@ With the above notation, each simulation configuration is a vector
     (\Delta t, v_{\text{mp}}, D, \Omega, R, N, f).
 \end{equation*}
 
-Using a configuration saved as a \texttt{.json} file, the simulation can be run from the command line by specifying the simulation duration and the storage interval. It outputs a \texttt{.csv} file with the disc counts averaged for each storage interval. If the storage interval is equal to or smaller than $\Delta t$, counts are not averaged and printed after every simulation step. The total simulation duration for all datasets was 60 seconds. This should be enough to see even slow developing prey-predator peaks.
+Using a configuration saved as a \texttt{.json} file, the simulation can be run from the command line by specifying the simulation duration and the storage interval. It outputs a \texttt{.csv} file with the disc counts averaged for each storage interval. If the storage interval is equal to or smaller than $\Delta t$, counts are not averaged and printed after every simulation step.
 
 \subsection{Lotka-Volterra dynamics}
 \label{subsection_lv_dynamics_intro}
-To test the simulation project, a simple prey-predator configuration was created. The configuration consists of the three disc types $D = \{\text{Prey}, \text{Predator}, \text{Resource}\}$ and the following reactions:
+To test the simulation project, a simple prey-predator configuration was created. The configuration consists of the three disc types
+
+\begin{equation*}
+    D = \{(\text{Prey}, 1, 5), (\text{Predator}, 1, 5), (\text{Resource}, 1, 2)\}.
+\end{equation*}
+
+The masses and radii were arbitrarily chosen. Additionally, the configuration consists of the following reactions:
 
 \begin{enumerate}
     \item $\text{Prey} + \text{Predator} \rightarrow \text{Predator} + \text{Predator}$ with $p_1$: Predators convert prey to predator.
@@ -163,7 +169,7 @@ Initially, the simulation only contains discs of type $\text{Resource}$. With fi
 
 \insertfigure{figures/example_good.png}{Example trajectory of disc type counts using a simple prey-predator configuration over 60s. Prey and predator counts show a distinct periodic characteristic, with prey peaks always followed by predator peaks.}{fig_lv_time_series_example}
 
-The dynamic shown in \cref{fig_lv_time_series_example} is typically referred to as a Lotka-Volterra (LV) dynamic (see \cref{subsection_lv_dynamics_related}). The goal of this project is to find the region of the six dimensional probability space for some fixed $f$, $\Delta t$, $v_{\text{mp}}$, $N$ and $R$ that is likely to exhibit LV dynamics. To this end, two binary classifiers were trained on a dataset obtained from the simulation: One using traditional deep learning methods with a single model, and a second using averaged weights from multiple models trained on subsets of the dataset using FL methods. The performance of these models is then compared using various scoring metrics. Additionally, the impact of IID and non-IID dataset splitting and the number of clients on the FL model performances is evaluated in comparison with the baseline model. 
+The dynamic shown in \cref{fig_lv_time_series_example} is typically referred to as a Lotka-Volterra (LV) dynamic (see \cref{subsection_lv_dynamics_related}). The goal of this project is to find the region of the six dimensional probability space for some fixed $f$, $\Delta t$, $v_{\text{mp}}$, $N$ and $R$ that is likely to exhibit LV dynamics. To this end, two binary classifiers were trained on a dataset obtained from the simulation: One using traditional deep learning methods with a single model, and a second using averaged weights from multiple models trained on subsets of the dataset using FL methods. The performance of these models is then compared using various scoring metrics. Additionally, the impact of IID and non-IID dataset splitting and the number of clients on the FL model performances is evaluated in comparison with the baseline model.
 
 \section{Related work}
 \subsection{Lotka-Volterra equations}
@@ -178,10 +184,10 @@ The dynamic shown in \cref{fig_lv_time_series_example} is very similar to dynami
 Here, $x$ and $y$ represent the prey and predator populations and the parameters $\alpha$, $\beta$, $\gamma$ and $\delta$ have similar roles to the probabilities $p_i$ of the above configuration. The solutions of these equations are however deterministic, assume a well-mixed environment and do not model a third reaction species like the resource in the above model with disc types. As long as the initial prey and predator counts and the parameters are all strictly positive, solutions of the Lotka-Volterra equations always show phase-shifted, periodic prey-predator peaks. In the more general reaction model with disc types, only a small region of the parameter space shows this dynamic. And since this is a custom developed model, it is unlikely that similar systems have been studied like this before.
 
 \subsection{Impact of dataset splitting on Federated Averaging}
-The impact of increasing number of clients and dataset splitting on the performance of models obtained using Federated Averaging is already discussed in the original Federated Averaging paper~\cite{McMahan2017}. 
+The impact of increasing number of clients and dataset splitting on the performance of models obtained using Federated Averaging is already discussed in the original Federated Averaging paper~\cite{McMahan2017}. If local client datasets are too small, the central model obtained by averaged weights is expected to perform more poorly.
 
 \section{Methodology}
-The project consists of three parts. First, a LV-classifier was developed to label data. It was designed to be simple and fast enough to quickly label thousands of CSV-files with disc count trajectories. Second, a simple dataset where only $p_1$ and $p_2$ (see \cref{subsection_lv_dynamics_intro}) were varied was created. The other four probabilities were fixed at values that are known to exhibit LV-dynamics. The resulting 2D probability space should give a first impression of whether the region of interest is closed or not. A simple model was trained on this smaller dataset to judge if the MLP approach is sufficiently accurate. Third, a larger dataset spanning the entire 6D probability space was created. Two different model types were trained with this data:
+The project consists of three parts. First, a LV-classifier was developed to label data. It was designed to be simple and fast enough to quickly label thousands of CSV-files with disc count trajectories. Second, a simple dataset where only $p_1$ and $p_2$ (see \cref{subsection_lv_dynamics_intro}) were varied was created. The other four probabilities were fixed at values that are known to exhibit LV-dynamics. The resulting 2D probability space should give a first impression of whether the region of interest is closed or not. A simple model was trained on this smaller dataset to judge if the chosen model type is sufficiently accurate. Third, a larger dataset spanning the entire 6D probability space was created. Two different model types were trained with this data:
 
 \begin{itemize}
     \item A single baseline model using the entire dataset for training
@@ -192,24 +198,26 @@ The project consists of three parts. First, a LV-classifier was developed to lab
     \end{itemize}
 \end{itemize}
 
-\subsection{Model topology}
+The total simulation duration for all datasets was 60 seconds. This should be enough to see even slow developing prey-predator peaks.
+
+\subsection{Model topology and training}
 All models were Multi Layer Perceptron (MLP) classifiers. With enough hidden units, MLPs can approximate complex multi-dimensional decision boundaries, needing relatively few parameters for the task in this project. In a FL setting, they require relatively low communication cost and train quickly on local clients. A Support Vector Machine (SVM) or logistic regression are possible candidates in case of poor MLP model performance. Unless stated otherwise, any dataset for training was split 80/20 into train and test data.
 
-All MLPs used have an input node for each probability (up to six), two hidden layers with 64 nodes each, and a single output node. The chosen activation function is ReLU ($f(x) = \max(0, x)$), which is a sensible default for binary classification. The learning rate and weight decay remained at the default values of $0.001$ each. To avoid varying internal representations of the data, the training data was scaled to zero mean and unit variance. The same scaler was used to scale the test data as well and was only fitted using the training data. 
+All MLPs used have an input node for each probability (up to six), two hidden layers with 64 nodes each, and a single output node. The chosen activation function is ReLU ($f(x) = \max(0, x)$), which is a sensible default for binary classification. The learning rate and weight decay remained at the default values of $0.001$ each. To avoid varying internal representations of the data, the training data was scaled to zero mean and unit variance. The same scaler was used to scale the test data as well and was only fitted using the training data. All models were trained for 50 epochs, minimizing log loss (see \cref{subsubsection_log_loss}) using \path{Adam}~\cite{adam} as the optimizer.
 
 \subsection{Datasets}
 Datasets were created by calling the CLI of the cell project from python scripts using \texttt{concurrent.futures.ProcessPoolExecutor} on Linux with four workers. The small 2D datasets where only $p_1$ and $p_2$ were varied was created by taking a configuration that was known to reliably exhibit LV dynamics according to the developed classifier and creating a $101 \times 101$ grid with $p_1, p_2 \in \mathbb{Z} \cap [0, 100]$.
 
-The larger 6D datasets used Latin hypercube sampling with $N = 20\,000$ across the whole 6D probability space. Latin hypercube sampling divides each dimension into $N$ equally sized intervals and generates $N$ samples such that each interval occurs exactly once in every dimension. One sample is then drawn uniformly from each interval. This ensures the samples lie roughly uniformly in 6D space, avoiding local clusters that could occur if, for example, random sampling was used instead. 
+The larger 6D datasets used Latin hypercube sampling with $N = 20\,000$ across the whole 6D probability space. Latin hypercube sampling divides each dimension into $N$ equally sized intervals and generates $N$ samples such that each interval occurs exactly once in every dimension. One sample is then drawn uniformly from each interval~\cite{latin_hypercube}. This ensures the samples lie roughly uniformly in 6D space, avoiding local clusters that could occur if, for example, random sampling was used instead.
 
 \subsection{Federated Learning}
 Since the dataset was already fully available, federated learning was simulated by splitting the training split of the dataset used for training the baseline model into several smaller ones. The test dataset was not visible to any clients and only used to evaluate the final model. Additionally, heatmaps on the $p_1 \times p_2$ plane were compared for each model. The same \texttt{StandardScaler} from the baseline model was used by all models involved to avoid a varying internal representation of the data. Training utilizes the Flower framework with federated averaging, following these steps:
 
 \begin{enumerate}
     \item The server is initialized with the global model weights $w_t$
-    \item These weights are sent to each participating client 
-    \item Each client trains locally for five epochs 
-    \item Each client then returns the updated weights to the server 
+    \item These weights are sent to each participating client
+    \item Each client trains locally for five epochs
+    \item Each client then returns the updated weights to the server
     \item The server computes a weighted average of the weights
     \item Repeat from step 2. ten times to have 50 epochs in total
 \end{enumerate}
@@ -217,7 +225,7 @@ Since the dataset was already fully available, federated learning was simulated 
 The dataset was split either via a stratified shuffled group split or uniformly along the $p_1$ axis to examine the impact of identically and independently distributed (IID) data versus non-IID data. Stratification ensures that all clients get roughly the same number of positive and negative labels. Since each 6D input vector corresponds to five simulation runs, a client should always see all five runs to be able to learn a meaningful probability. This is why all five runs were grouped together and the groups were then distributed across the clients.
 
 \subsection{Scoring methods}
-Performance of the models was judged by comparing 2D heatmaps of the decision boundary with simulated data and by calculating the ROC AUC, log loss and the brier score. As a shorthand, a \enquote{score} in the context of this project is a tuple of the form $(\text{ROC AUC}, \text{log loss}, \text{brier score})$. 
+Performance of the models was judged by comparing 2D heatmaps of the decision boundary with simulated data and by calculating the ROC AUC, log loss and the brier score. As a shorthand, a \enquote{score} in the context of this project is a tuple of the form $(\text{ROC AUC}, \text{log loss}, \text{brier score})$.
 
 \subsubsection{ROC AUC}
 The receiver operating characteristic (ROC) is calculated by varying the positive label threshold for the predicted probability of a binary classifier and plotting the true positive rate against the false positive rate. A perfect classifier goes through the point $(0, 1)$, which means the model perfectly separates all true positives from false positives. Since the curve is monotonically increasing (adding additional false positives will never decrease the true positive rate), the area under the curve (AUC) for the perfect model is $1$ (area of unit square). A random classifier would follow the identity line and have an AUC of $0.5$. The closer a model is to this line, the worse it performs. An AUC of $< 0.5$ is technically even worse, but then the model's output could just be inverted to obtain an AUC of $> 0.5$ again. An example plot is shown in \cref{fig_roc_auc}.
@@ -234,7 +242,8 @@ The \textit{brier score} is the mean squared error:
 where $p_i \in [0, 1]$ are the predicted probabilities and $y_i \in \{0, 1\}$ are the true labels. The brier score measures the overall accuracy of the model, where a score of $0$ is best and $1$ is worst.
 
 \subsubsection{Log loss}
-The binary cross entropy or \textit{log loss} is calculated via 
+\label{subsubsection_log_loss}
+The binary cross entropy or \textit{log loss} is calculated via
 
 \begin{equation*}
     \text{Log loss} = -\frac{1}{N}\sum_{i=1}^N\left(y_i\log(p_i)+(1-y_i)\log(1-p_i)\right).
@@ -251,7 +260,13 @@ The definition of "LV-like dynamics" in the context of this project is mostly qu
     \item The peaks are phase-shifted with the predator peaks lagging behind the prey peaks
 \end{itemize}
 
-\Cref{fig_lv_good_bad} shows the classifier in action. The classifier smoothes the curves using \path{scipy.signal.savgol_filter} and mostly relies on the \texttt{prominence} parameter of \path{scipy.signal.find_peaks}, which measures how much the peak stands out from its surrounding~\cite{prominence}.
+\Cref{fig_lv_good_bad} shows the classifier in action. The classifier smoothes the curves using \path{scipy.signal.savgol_filter} with a window size of $501$ and mostly relies on the \texttt{prominence} parameter of \path{scipy.signal.find_peaks}, which measures how much the peak stands out from its surrounding~\cite{prominence}. To be exact, a trajectory is labeled as positive if
+
+\begin{itemize}
+    \item \path{find_peaks} found at least three peaks for the prey and another three peaks for the predator counts
+    \item the number of prey peaks $N_{\text{prey}}$ and the number of predator peaks $N_{\text{predator}}$ don't differ by more than two ($|N_{\text{prey}} - N_{\text{predator}}| \overset{!}{<} 3|$)
+    \item the median temporal lag between the prey and predator peaks is positive
+\end{itemize}
 
 \insertfigure{figures/lv_good_bad.jpg}{LV classification of two prey-predator count trajectories. The smoothed curves were drawn on top of the original count trajectories. Trajectories are labeled as yes or no depending on how many peaks are found and if predator peaks lag behind prey peaks. Peaks are found using \texttt{scipy.signal.find\_peaks} and marked with dots.}{fig_lv_good_bad}
 
@@ -261,11 +276,11 @@ To find the optimal parameters for the classifier, a 2D dataset was created by v
 
 \subsection{Training a model on a 2D subspace}
 \label{subsection_simple_model}
-Using the 2D dataset where only $p_1$ and $p_2$ were varied, a simple MLP classifier with two input nodes was trained. Since each unique combination or \textit{group} was simulated five times, using group shuffling for the train and test datasets was necessary avoid unique combinations to appear in both. The decision boundary of this model and the original LV classification results are compared in \cref{fig_simple_model_comp}.
+Using the 2D dataset where only $p_1$ and $p_2$ were varied, a simple MLP classifier with two input nodes was trained. Since each unique combination or \textit{group} was simulated five times, using group shuffling for the train and test datasets was necessary to avoid unique combinations to appear in both. The decision boundary of this model and the original LV classification results are compared in \cref{fig_simple_model_comp}.
 
 \insertfigure{figures/simple_comp.jpg}{Comparison of empirically estimated and model-predicted probability landscapes on a fixed $100 \times 100$ grid.}{fig_simple_model_comp}
 
-The score of this model is $(0.984, 0.064, 0.019)$. The highest predicted probability is $0.94$.
+The score of this model was $(0.984, 0.064, 0.019)$. The highest predicted probability was $0.94$.
 
 \subsection{Training a model on the full 6D space}
 \label{subsection_baseline_model}
@@ -277,30 +292,30 @@ The model extrapolated incorrectly in the region of $p_1 \in [0, 0.1]$. Subseque
 
 \insertfigure{figures/full_comp_2.jpg}{Predicted label probabilities of the model trained on the dataset with $p_1 \in [0, 1]$ instead of $p_1 \in [0.1, 1]$.}{fig_full_model_comp_2}
 
-The incomplete model from \cref{fig_full_model_comp_1} had the score $(0.971, 0.088, 0.027)$, whereas the corrected one had $(0.963, 0.090, 0.027)$. The highest predicted probability of the full model was $0.92$. 
+The incomplete model from \cref{fig_full_model_comp_1} had the score $(0.971, 0.088, 0.027)$, whereas the corrected one had $(0.963, 0.090, 0.027)$. The highest predicted probability of the full model was $0.92$.
 
 \subsection{FL models}
 The scores as a function of the number of clients are shown in \cref{fig_scores_comp}.
 
 \insertfigure{figures/scores_comp.jpg}{ROC AUC, brier score and log loss as a function of the number of clients for models trained on either the IID (random) or non-IID (cohesive) dataset splits.}{fig_scores_comp}
 
-The predicted probabilities of the FL models using IID and non-IID dataset splits for $N=2$ and $N=64$ are shown in \cref{fig_fl_heatmap_n2_iid,fig_fl_heatmap_n64_iid,fig_fl_heatmap_n2_non_iid,fig_fl_heatmap_n64_non_iid}. 
+The predicted probabilities of the FL models using IID and non-IID dataset splits for $N=2$ and $N=64$ are shown in \cref{fig_fl_heatmap_n2_iid,fig_fl_heatmap_n64_iid,fig_fl_heatmap_n2_non_iid,fig_fl_heatmap_n64_non_iid}.
 
 Even for $N = 2$, the maximum predicted probability on the $p_1 \times p_2$ plane was $0.73$ for the model trained on IID data, and $0.64$ for the one trained on non-IID data. This is significantly lower compared to $0.92$ for the baseline model (see \cref{subsection_baseline_model}).
 
 \section{Discussion}
 \subsection{The simple 2D model}
-According to \cref{fig_simple_model_comp}, the simple MLP model was able to approximate the positive region quite well. Together with the good accuracy scores of this model, this indicates the model can correctly predict how likely any given combination of $(p_1, p_2)$ will result in LV dynamics. Since MLPs seem to be a good fit for this problem, SVMs, logistic regression or other approaches were not attempted.
+According to \cref{fig_simple_model_comp}, the simple MLP model was able to approximate the positive region quite well. Together with the good accuracy scores of this model, this indicates the model can correctly predict how likely any given combination of $(p_1, p_2)$ will result in LV dynamics. Since MLPs seem to be a good fit for this problem, SVMs, logistic regression or other approaches were not explored.
 
 \subsection{The full 6D baseline model}
-The small number of positive results in the first 6D dataset spanning the entire probability space indicate a very small surface area of the interesting region in 6D space. The second training dataset only contained values for $p_1 \in [0.1, 1]$ and the model didn't learn the correct distribution for $p_1 \in [0, 0.1]$ (see \cref{fig_full_model_comp_1}). Since it wasn't included in the training dataset and nearby empirical values were positive, the model incorrectly extrapolated a high label frequency into this region. 
+The small number of positive results in the first 6D dataset spanning the entire probability space indicates a very small surface area of the interesting region in 6D space. The second training dataset only contained values for $p_1 \in [0.1, 1]$ and the model didn't learn the correct distribution for $p_1 \in [0, 0.1]$ (see \cref{fig_full_model_comp_1}). Since it wasn't included in the training dataset and nearby empirical values were positive, the model incorrectly extrapolated a high label frequency into this region.
 
 The scores for the incorrectly extrapolating model were even slightly better than the one correctly trained on the missing region. This exemplifies how scores can only be meaningfully interpreted if the used testing dataset is appropriate.
 
 \subsection{FL models}
 According to \cref{fig_scores_comp}, the scores degrade with increasing number of clients. The models trained on the IID data perform consistently better than the ones trained on non-IID data. This is in line with expectations: A sparser local dataset will negatively impact prediction performance of locally trained models, and since the global model is obtained by averaging local model updates, it reflects this characteristic.
 
-As expected, the performance of the FL models approached that of the baseline model when fewer clients were used.  Interestingly, even for small $N$ such as $N=2$ the confidence of the model, i.e. its highest predicted probability, is quite low for both dataset splits. This is most likely due to the MLP trying to minimize the log loss in regions with missing data, which is sensitive to confident wrong predictions. 
+As expected, the performance of the FL models approached that of the baseline model when fewer clients were used.  Interestingly, even for small $N$ such as $N=2$ the confidence of the model, i.e. its highest predicted probability, is quite low for both dataset splits. This is most likely due to the MLP trying to minimize the log loss in regions with missing data, which is sensitive to confident wrong predictions.
 
 \section{Conclusion}
 The MLP model proved to be successful in predicting the likelihood of LV dynamics as defined in this project in 6D probability space. Since visualizing the entire 6D space is challenging, it cannot be concluded if the baseline model, and subsequently the FL models, fully learned the decision boundary. Other regions may exist. However, as \cref{fig_simple_model_comp} showed, the model is capable of learning a given region in 6D subspace, indicating that if all regions are present in the training dataset, they were likely learned as well.
@@ -311,12 +326,12 @@ Future work could include full visualization of the 6D space to identify the who
 
 \pagebreak
 
-\appendix 
+\appendix
 
 \section{Supplementary figures}
 
 \setcounter{figure}{0}
-\renewcommand\thefigure{\thesection.\arabic{figure}}   
+\renewcommand\thefigure{\thesection.\arabic{figure}}
 
 \insertfigure{figures/fl_n2_iid.jpg}{Predicted probabilities of the global model trained using FL with $N=2$ clients using the IID split compared with empirical frequencies}{fig_fl_heatmap_n2_iid}
 
