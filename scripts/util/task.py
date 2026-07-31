@@ -76,7 +76,7 @@ def _run_task(task, cfg, output_dir):
 
 def execute_tasks(tasks, cfg, output_dir):
     output_dir.mkdir(parents=True, exist_ok=True)
-    workers = 1 #os.cpu_count()
+    workers = os.cpu_count()
     queue_size = workers * 2
     futures = deque()
     print(f"Number of workers: {workers}")
