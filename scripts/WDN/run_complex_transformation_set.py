@@ -1,25 +1,46 @@
 import json
 from util.paths import CONFIG_DIR, DATASETS_DIR
-from util.task import Task, execute_tasks, create_mapfile
-from itertools import product
+from util.task import Task, execute_tasks
 import numpy as np
 from itertools import permutations
-from dataclasses import dataclass
-from typing import Any
 import random
 import networkx as nx
 import matplotlib.pyplot as plt
+import iteround
 
 N_MAX_SPECIES = 5
 N_RUNS = 5000
+SET_NAME = 'complex_transformation_set_1'
+random.seed(42)
+np.random.seed(42)
 
-@dataclass
-class TransformationTask:
-    species: list[str]
-    fractions: np.array
-    reactions: dict[str, Any] # {educt, product, probability}
+class TransformationTask(Task):
+    def __init__(self, species=None, fractions=None, reactions=None, filename=None):
+        self.species = species
+        self.fractions = fractions
+        self.reactions = reactions
+        self.filename = filename
 
-def generate_random_task():
+    def _apply_to_cfg(self, cfg):
+        cfg['config']['discTypes'] = [
+            {'mass': 1, 'radius': 1, 'name': name}
+            for name in self.species
+        ]
+
+        for fraction, species_name in zip(self.fractions, self.species):
+            cfg['config']['cellMembraneType']['discTypeDistribution'][species_name] = fraction
+
+        cfg['config']['reactions'] = []
+        for reaction in self.reactions:
+            cfg['config']['reactions'].append({
+                'educt1': reaction['educt'],
+                'educt2': '',
+                'product1': reaction['product'],
+                'product2': '',
+                'probability': reaction['p']
+            })
+
+def generate_random_task(filename):
     n_species = np.random.randint(2, N_MAX_SPECIES + 1)
     species = [chr(ord('A') + i) for i in range(n_species)]
 
@@ -33,10 +54,10 @@ def generate_random_task():
         edges = [random.choice(possible_edges)]
     reactions = []
     for edge in edges:
-        reaction = dict(educt=edge[0], product=edge[1], p=np.random.uniform(0, 0.1))
+        reaction = dict(educt=edge[0], product=edge[1], p=np.random.uniform(1e-3, 0.1))
         reactions.append(reaction)
 
-    return TransformationTask(species=species, fractions=fractions, reactions=reactions)
+    return TransformationTask(species=species, fractions=fractions, reactions=reactions, filename=filename)
 
 def plot_transformation_task(task: TransformationTask):
     G = nx.MultiDiGraph()
@@ -77,52 +98,25 @@ def plot_transformation_task(task: TransformationTask):
     plt.title("Transformation Task")
     plt.show()
 
-def set_cfg(cfg, task: TransformationTask):
-    cfg['config']['discTypes'] = [
-        {'mass': 1, 'radius': 1, 'name': name}
-        for name in task.species
-    ]
-
-    for fraction, species_name in zip(task.fractions, task.species):
-        cfg['config']['cellMembraneType']['discTypeDistribution'][species_name] = fraction
-
-    for reaction in task.reactions:
-        cfg['config']['reactions'].append({
-            'educt1': reaction['educt'],
-            'educt2': '',
-            'product1': reaction['product'],
-            'product2': '',
-            'probability': reaction['p']
-        })
-
-for _ in range(N_RUNS):
-    task = generate_random_task()
-    print(task)
-    plot_transformation_task(task)
-
+mapfile_path = DATASETS_DIR / f"WDN/{SET_NAME}.csv"
 tasks = []
-i = 0
-for p, A0, B0 in product(p_vals, A0_vals, B0_vals):
-    for r in range(3):  # Reduced from 5 to 3 repetitions
-        N = A0 + B0
-        params = dict(
-            filename=f"simple_transformation_set_3_{i:04d}.csv",
-            r=r,
-            p=p,
-            N=N,
-            f_A=A0/N if N > 0 else 1,
-            f_B=B0/N if N > 0 else 0
-        )
-        tasks.append(Task(params, mapping))
-        i += 1
-
-mapfile_path = DATASETS_DIR / "WDN/simple_transformation_set_3.csv"
-create_mapfile(tasks, mapfile_path)
+with open(mapfile_path, "w") as f:
+    f.write("filename,species,fractions,reactions\n")
+    for i in range(N_RUNS):
+        filename = f"run_{i:04d}.csv"
+        task = generate_random_task(filename)
+        tasks.append(task)
+        species = task.species
+        rounded_fractions = iteround.saferound(task.fractions, 3)
+        reactions = []
+        for reaction in task.reactions:
+            reactions.append((species.index(reaction['educt']), species.index(reaction['product']), round(reaction['p'], 3)))
+        f.write(f"{filename},{json.dumps(species)},{json.dumps(rounded_fractions)},{json.dumps(reactions)}\n")
 
 with open(CONFIG_DIR / "WDN/transformation_simple.json") as f:
     cfg = json.load(f)
 
-output_dir = DATASETS_DIR / "WDN/simple_transformation_set_3"
+output_dir = DATASETS_DIR / f"WDN/{SET_NAME}"
 
 if __name__ == "__main__":
     execute_tasks(tasks, cfg, output_dir)

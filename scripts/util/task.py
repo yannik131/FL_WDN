@@ -21,7 +21,7 @@ class Task:
         self.params = params
         self.mapping = mapping
 
-    def __apply_to_cfg(self, cfg):
+    def _apply_to_cfg(self, cfg):
         for param, keys in self.mapping.items():
             tmp_cfg = cfg
             for key in keys[:-1]:
@@ -30,7 +30,7 @@ class Task:
 
     def run(self, cfg, output_dir):
         cfg = copy.deepcopy(cfg)
-        self.__apply_to_cfg(cfg)
+        self._apply_to_cfg(cfg)
         out = output_dir / self.filename
 
         if Path(out).exists():
@@ -65,7 +65,7 @@ def create_mapfile(tasks, path, header_mapping=None):
 
     if header_mapping is not None:
         headers = [header_mapping.get(header, header) for header in headers]
-    
+
     with open(path, "w") as f:
         f.write("filename," + ",".join(headers) + ",r\n")
         for task in tasks:
@@ -76,7 +76,7 @@ def _run_task(task, cfg, output_dir):
 
 def execute_tasks(tasks, cfg, output_dir):
     output_dir.mkdir(parents=True, exist_ok=True)
-    workers = os.cpu_count()
+    workers = 1 #os.cpu_count()
     queue_size = workers * 2
     futures = deque()
     print(f"Number of workers: {workers}")
@@ -104,6 +104,3 @@ def execute_tasks(tasks, cfg, output_dir):
         except KeyboardInterrupt:
             print("Interrupt detected, waiting for tasks to finish...")
             pool.shutdown(wait=False, cancel_futures=True)
-
-
-
