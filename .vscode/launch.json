@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug WDN.script",
+            "type": "python",
+            "request": "launch",
+            "module": "WDN.script",
+            "cwd": "${workspaceFolder}/scripts",
+            "console": "integratedTerminal"
+        }
+    ]
+}
