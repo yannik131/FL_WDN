@@ -7,6 +7,7 @@ import random
 import networkx as nx
 import matplotlib.pyplot as plt
 import iteround
+import csv
 
 N_MAX_SPECIES = 5
 N_RUNS = 5000
@@ -100,8 +101,9 @@ def plot_transformation_task(task: TransformationTask):
 
 mapfile_path = DATASETS_DIR / f"WDN/{SET_NAME}.csv"
 tasks = []
-with open(mapfile_path, "w") as f:
-    f.write("filename,species,fractions,reactions\n")
+with open(mapfile_path, "w", newline='') as f:
+    writer = csv.writer(f)
+    writer.writerow(["filename", "species", "fractions", "reactions"])
     for i in range(N_RUNS):
         filename = f"run_{i:04d}.csv"
         task = generate_random_task(filename)
@@ -111,7 +113,13 @@ with open(mapfile_path, "w") as f:
         reactions = []
         for reaction in task.reactions:
             reactions.append((species.index(reaction['educt']), species.index(reaction['product']), round(reaction['p'], 3)))
-        f.write(f"{filename},{json.dumps(species)},{json.dumps(rounded_fractions)},{json.dumps(reactions)}\n")
+
+        writer.writerow([
+            filename,
+            json.dumps(species),
+            json.dumps(rounded_fractions),
+            json.dumps(reactions),
+        ])
 
 with open(CONFIG_DIR / "WDN/transformation_simple.json") as f:
     cfg = json.load(f)

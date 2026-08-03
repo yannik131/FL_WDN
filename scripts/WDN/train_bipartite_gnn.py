@@ -1,6 +1,5 @@
 import logging
-from pathlib import Path
-
+import json
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -9,14 +8,20 @@ import torch.nn as nn
 from torch_geometric.data import Data, Dataset
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
-
 from util.paths import DATASETS_DIR, RESULTS_DIR
 
-logging.basicConfig(level=logging.INFO)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
 logger = logging.getLogger(__name__)
 
-MODEL_PATH = RESULTS_DIR / "WDN/trans_comp_gnn.pt"
-DATASET_PATH = DATASETS_DIR / "WDN/trans_comp_set_1.pt"
+SET_NAME = 'complex_transformation_set_1'
+MODEL_PATH = RESULTS_DIR / f"WDN/{SET_NAME}.pt"
+DATASET_PATH = DATASETS_DIR / f"WDN/{SET_NAME}.pt"
+
 
 def resample_counts(df, dt=0.05):
     time_col = "ElapsedTime[s]"
@@ -28,84 +33,117 @@ def resample_counts(df, dt=0.05):
     for col in count_cols:
         df_interp[col] = np.interp(new_time, x, df[col].to_numpy())
 
+    N = df_interp.loc[0, count_cols].sum()
+    if N > 0:
+        df_interp[count_cols] /= N
+
     return df_interp
 
 
-def create_graph(A, B, C, N0, p_trans, p_comb):
-    # [current_count, initial_total, is_reaction, prob]
-    x = torch.tensor([
-        [float(A), float(N0), 0, 0],
-        [float(B), float(N0), 0, 0],
-        [float(C), float(N0), 0, 0],
-        [0, float(N0), 1, p_trans],
-        [0, float(N0), 1, p_comb]
-    ], dtype=torch.float)
+def create_graph(species_values, reactions):
+    """
+    species_values: sequence such as [A, B, C], each entry a fraction in [0, 1]
+    reactions: [[source_index, target_index, probability], ...]
+    each graph represents a unique fraction of species
+    """
+    num_species = len(species_values)
+    num_reactions = len(reactions)
+    num_nodes = num_species + num_reactions
 
-    educt_edge_index = torch.tensor([
-        [0, 0, 1],
-        [3, 4, 4]
-    ], dtype=torch.long)
-    educt_stoich = torch.tensor([
-        [1],
-        [1],
-        [1],
-    ], dtype=torch.float)
+    # Species contain their current fraction; reaction nodes start at zero.
+    # x = [[0.3], <- species nodes until num_species, current fraction as value
+    #      [0.2], rest are reaction nodes
+    #      ...
+    #      [p_n]] <- prob of last reaction
+    x = torch.zeros((num_nodes, 1), dtype=torch.float)
+    x[:num_species, 0] = torch.tensor(species_values, dtype=torch.float)
 
-    product_edge_index = torch.tensor([
-        [3, 4],
-        [1, 2]
-    ], dtype=torch.float)
-    product_stoich = torch.tensor([
-        [1],
-        [1]
-    ], dtype=torch.float)
+    # helper to later see where species nodes end and where reaction nodes start
+    species_mask = torch.zeros(num_nodes, dtype=torch.bool)
+    species_mask[:num_species] = True
 
+    reaction_p = torch.zeros((num_nodes, 1), dtype=torch.float)
+
+    # each reaction has 2 edges:
+    # A -> R1, edge_kind == 0
+    # R1 -> B, edge_kind == 1
+    edges = []
+    edge_kind = []
+
+    for reaction_idx, (source_idx, target_idx, p) in enumerate(reactions):
+        reaction_node = num_species + reaction_idx
+
+        # this is the A -> R1 edge
+        edges.append([source_idx, reaction_node])
+        edge_kind.append(0)
+
+        # R1 -> A edge
+        edges.append([reaction_node, target_idx])
+        edge_kind.append(1)
+
+        # store only for the reaction nodes the reaction probability
+        reaction_p[reaction_node, 0] = float(p)
+
+    # edges = [[species_node1, reaction_node1], [reaction_node1, species_node2], ...]
+    # torch.tensor(edges).t() = [[species_node1, reaction_node1, ...]  <- All sources
+    #                            [reaction_node1, species_node2, ...]] <- All targets
     return Data(
         x=x,
-        educt_edge_index=educt_edge_index,
-        educt_stoich=educt_stoich,
-        product_edge_index=product_edge_index,
-        product_stoich=product_stoich,
-        species_mask=torch.tensor([True, True, True, False, False])
+        edge_index=torch.tensor(edges, dtype=torch.long).t().contiguous(),
+        edge_kind=torch.tensor(edge_kind, dtype=torch.long),
+        reaction_p=reaction_p,
+        species_mask=species_mask,
     )
-
 
 class ReactionDataset(Dataset):
     def __init__(self, mapping_file):
         super().__init__()
         self.samples = []
         rollout_steps = 20
-        mapping = pd.read_csv(mapping_file)
+        logger.info(f"Reading {mapping_file}")
+        mapping = pd.read_csv(mapping_file).head(1000)
 
-        for _, row in tqdm(mapping.iterrows(), total=len(mapping)):
-            filename = row["filename"]
-            N0 = float(row["N"])
-            p_trans = float(row["A->B"])
-            p_comb = float(row["A+B->C"])
+        for row in tqdm(mapping.itertuples(index=False), total=len(mapping)):
+            filename = row.filename
+            species = json.loads(row.species)
+            reactions = json.loads(row.reactions)
 
-            df = pd.read_csv(DATASETS_DIR / "WDN/trans_comp_set_1" / filename)
+            df = pd.read_csv(
+                DATASETS_DIR / f"WDN/{SET_NAME}" / filename
+            )
             df = resample_counts(df)
 
             if df.isna().any().any():
                 print(filename, "resulted in nan")
+                continue
 
-            A = df["A"]
-            B = df["B"]
-            C = df["C"]
+            # species: ['A', 'B', 'C', 'D']
+            # df:
+            #        ElapsedTime[s]     A     B     C     D
+            # 0               0.000  1570   966  2868  2357
+            # 1               0.003  1569   966  2868  2358
+            # values:
+            #           A     B     C     D
+            #   0      1570   966  2868  2357
+            #   1      1569   966  2868  2358
+            # values.iloc[0] = pd Series for the first row
+            # values.iloc[0].to_numpy() = [1570,  966, 2868, 2357]
+            values = df[species]
 
-            """
-            node features:
-                x              y
-            A:  [A(t)]      -> [A(t+dt), A(t+2*dt), ..., A(t+rollout_steps*dt)]
-            B:  [B(t)]      -> [B(t+dt), B(t+2*dt), ..., B(t+rollout_steps*dt)]
-            """
             for i in range(len(df) - rollout_steps):
-                graph = create_graph(A.iloc[i], B.iloc[i], C.iloc[i], N0, p_trans, p_comb)
-                graph.y = torch.tensor([
-                    A.iloc[i + 1:i + rollout_steps + 1].to_numpy(),
-                    B.iloc[i + 1:i + rollout_steps + 1].to_numpy(),
-                    C.iloc[i + 1:i + rollout_steps + 1].to_numpy()
-                ], dtype=torch.float)
+                graph = create_graph(
+                    species_values=values.iloc[i].to_numpy(),
+                    reactions=reactions,
+                )
+
+                # values.iloc[0:2].to_numpy() = [[1570,  966, 2868, 2357],
+                #                                [1569,  966, 2868, 2358]]
+                # values.iloc[0:2].to_numpy().T = [[Values for A], [Values for B], ...]
+                graph.y = torch.tensor(
+                    values.iloc[i + 1:i + rollout_steps + 1].to_numpy().T,
+                    dtype=torch.float,
+                )
+
                 self.samples.append(graph)
 
     def len(self):
@@ -120,11 +158,12 @@ def load_dataset():
         logger.info(f"Loading dataset from {DATASET_PATH}")
         return torch.load(DATASET_PATH, weights_only=False)
 
-    mapping_file = DATASETS_DIR / "WDN/trans_comp_set_1.csv"
+    mapping_file = DATASETS_DIR / f"WDN/{SET_NAME}.csv"
     dataset = ReactionDataset(mapping_file)
 
     logger.info(f"Saving dataset to {DATASET_PATH}")
     torch.save(dataset, DATASET_PATH)
+    logger.info("Done saving")
     return dataset
 
 
@@ -132,151 +171,182 @@ class ReactionGNN(nn.Module):
     def __init__(self):
         super().__init__()
 
-        # Message from a reactant species to a reaction node:
-        # [available reactant count, initial N, reaction probability, stoichiometry]
-        self.reactant_message = nn.Sequential(
-            nn.Linear(4, 64),
+        # Message from a reactant species to its reaction node.
+        # Input: [reactant_fraction, reaction_probability]
+        self.reactant_mlp = nn.Sequential(
+            nn.Linear(2, 32),
             nn.ReLU(),
-            nn.Linear(64, 64),
+            nn.Linear(32, 32),
             nn.ReLU(),
         )
 
-        # Predict the fraction of the currently possible reaction extent.
-        self.extent_mlp = nn.Sequential(
-            nn.Linear(64 + 2, 64),  # aggregated messages, N0, p
+        # Message from reaction node to product species.
+        # Input: [reaction_hidden_state, product_fraction, reaction_probability]
+        self.product_mlp = nn.Sequential(
+            nn.Linear(32 + 1 + 1, 32),
             nn.ReLU(),
-            nn.Linear(64, 1),
+            nn.Linear(32, 1),
         )
 
-    def forward(self, data, current_species_counts):
+    def forward(self, data):
         """
-        Args:
-            data: Batched PyG graph.
-            current_species_counts: [number_of_species_nodes_in_batch, 1].
+        Shapes of all variables:
+x = [[f_A], <- species nodes until num_species, current fraction as value
+     [f_B], rest are reaction nodes
+      ...
+      p_n]] <- prob of last reaction
+x.size() = [num_species + num_reactions, 1]
+x.size(0) = num_species
+x.size(1) = x.size(-1) = num_reactions
 
-        Returns:
-            Next absolute counts for species nodes only:
-            [number_of_species_nodes_in_batch, 1].
+edge_index = [[A,  R1, B,  R2, ...],  <- A, R1, B, ... are indices for x
+              [R1, B,  R2, A, ...]]
+src        =  [A, R1,  B,  R2, ...]
+dst        =  [R1, B,  R2, A, ...]
+
+edge_kind =   [0,  1,  0,  1, ...] <- 0 refers to educt->reaction, 1 to reaction->product
+reactant_edge_mask = [ True, False, True, False, ...]
+product_edge_mask =  [ False, True, False, True, ...]
+
+reactant_src =   src[reactant_edge_mask] = [A, B, ...]
+reaction_nodes = dst[reactant_edge_mask] = [R1, R2, ...]
+
+reaction_ p = [[p1],
+               [p2],
+               ...,
+               [p_n]] <- Probs for the reactions R1, R2, ...
+
+x[reactant_src] = [[f_A],
+                   [f_B],
+                   ....] <- fractions of all educts from the reactions
+reaction_p[reaction_nodes] = [[p_1],
+                              [p_2],
+                              ...]] <- probs of the reactions that have reactant_src as their educts
+-> reaction_input = torch.cat([x[reactant_src], reaction_p[reaction_nodes]], dim=-1)
+= [[f_A, p_1],
+   [f_B, p_2],
+   ...] <- array of [educt_fraction, reaction_prob]
+
+reaction_messages = [[v1, v2, ..., v32],
+                     [v1, v2, ..., v32],
+                     ...,] <- 32 values for each [educt fraction, reaction_p] pair
+reaction_messages.size(-1) = 32 (last dimension is number of columns)
+
+index_add explanation:
+let x = torch.zeros((3, 2)) = [[0, 0, 0],
+                               [0, 0, 0]]
+let src = [[1, 2, 3],
+           [4, 5, 6]]
+
+then x.index_add(0, index, src) will iterate i, row in zip(index, src) and add row to the x[i] row
+example: x.index_add(0, [0, 1], src) = [[1, 2, 3],
+                                        [4, 5, 6]]
+         x.index_add(0, [0, 0], src) = [[5, 7, 9],
+                                        [0, 0, 0]]
+the first argument is the dimension, dim=0 -> rows
+dim=1 -> columns, example:
+x.index_add(1, [0, 0, 0], src) = [[6, 0, 0],
+                                  [15, 0, 0]]
+x.index_add(1, [0, 1, 0], src) = [[4, 2, 0],
+                                  [10, 5, 0]]
+
+reaction_hidden = [[0, 0, 0, ..., 0], <- values for species nodes, no input
+                   [0, 0, 0, ..., 0],
+                   ...,
+                   [v1, v2, ..., v32],
+                   [v1, v2, ..., v32]] <- the messages calculated for each [f_X, p_n] pair
         """
-        species_mask = data.species_mask
-        num_nodes = data.num_nodes
-        device = data.x.device
 
-        # Insert the rolling species state into graph node features.
-        current_counts = data.x[:, 0:1].clone()
-        current_counts[species_mask] = current_species_counts
+        x = data.x
+        src, dst = data.edge_index
+        edge_kind = data.edge_kind
+        reaction_p = data.reaction_p
 
-        react_src, react_dst = data.reactant_edge_index
-        react_stoich = data.reactant_stoich
+        reactant_edge_mask = edge_kind == 0
+        product_edge_mask = edge_kind == 1
 
-        product_src, product_dst = data.product_edge_index
-        product_stoich = data.product_stoich
+        # First message-passing phase: species -> reaction.
+        reactant_src = src[reactant_edge_mask]
+        reaction_nodes = dst[reactant_edge_mask]
 
-        N0 = data.x[:, 1:2]
-        reaction_p = data.x[:, 3:4]
-
-        # For A + B -> C, each reaction can occur at most min(A, B).
-        available_per_edge = current_counts[react_src] / react_stoich
-
-        reactant_input = torch.cat([
-            available_per_edge,
-            N0[react_src],
-            reaction_p[react_dst],
-            react_stoich,
+        reaction_input = torch.cat([
+            x[reactant_src],
+            reaction_p[reaction_nodes],
         ], dim=-1)
 
-        messages = self.reactant_message(reactant_input)
+        reaction_messages = self.reactant_mlp(reaction_input)
 
-        # Aggregate reactant messages at each reaction node.
-        aggregated = torch.zeros(
-            (num_nodes, messages.size(-1)),
-            device=device,
-            dtype=messages.dtype,
+        reaction_hidden = torch.zeros(
+            (x.size(0), reaction_messages.size(-1)),
+            dtype=x.dtype,
+            device=x.device,
         )
-        aggregated.index_add_(0, react_dst, messages)
+        # this really just adds a row of 32 zeros at the beginning of reaction_messages since the first rows correspond to the species nodes
+        reaction_hidden.index_add_(0, reaction_nodes, reaction_messages)
 
-        degree = torch.zeros((num_nodes, 1), device=device)
-        degree.index_add_(
-            0,
-            react_dst,
-            torch.ones((react_dst.numel(), 1), device=device),
+        # Also pass reactant availability to the reaction node.
+        # For current unary reactions, each reaction has exactly one reactant.
+        reactant_amount = torch.zeros_like(x)
+        reactant_amount.index_add_(0, reaction_nodes, x[reactant_src])
+
+        # Map each reaction node back to its reactant species node.
+        reaction_source = torch.full(
+            (x.size(0),),
+            -1,
+            dtype=torch.long,
+            device=x.device,
         )
-        aggregated = aggregated / degree.clamp_min(1.0)
+        reaction_source[reaction_nodes] = reactant_src
 
-        # Limiting reagent: min(count / stoichiometry) over reactants.
-        limiting_amount = torch.full(
-            (num_nodes, 1),
-            float("inf"),
-            device=device,
-        )
-        limiting_amount.scatter_reduce_(
-            0,
-            react_dst.unsqueeze(-1),
-            available_per_edge,
-            reduce="amin",
-            include_self=True,
-        )
+        # Second message-passing phase: reaction -> product species.
+        product_reactions = src[product_edge_mask]
+        product_nodes = dst[product_edge_mask]
+        product_sources = reaction_source[product_reactions]
 
-        reaction_nodes = ~species_mask
-        limiting_amount[~reaction_nodes] = 0.0
-        limiting_amount[torch.isinf(limiting_amount)] = 0.0
-
-        extent_input = torch.cat([
-            aggregated,
-            N0,
-            reaction_p,
+        product_input = torch.cat([
+            reaction_hidden[product_reactions],
+            x[product_nodes],
+            reaction_p[product_reactions],
         ], dim=-1)
 
-        # One non-negative extent per reaction node.
-        reaction_extent = (
-            torch.sigmoid(self.extent_mlp(extent_input))
-            * reaction_p
-            * limiting_amount
-        )
-        reaction_extent[~reaction_nodes] = 0.0
+        # Learned fraction of the reaction probability that occurs this step.
+        reaction_fraction = torch.sigmoid(self.product_mlp(product_input))
 
-        # If reactions share a reactant, do not consume more particles than exist.
-        provisional_demand = torch.zeros((num_nodes, 1), device=device)
-        provisional_demand.index_add_(
-            0,
-            react_src,
-            react_stoich * reaction_extent[react_dst],
+        requested_flux = (
+            reaction_fraction
+            * reaction_p[product_reactions]
+            * reactant_amount[product_reactions]
         )
 
-        species_scale = torch.ones((num_nodes, 1), device=device)
-        has_demand = provisional_demand > 0
-        species_scale[has_demand] = torch.minimum(
-            torch.ones_like(current_counts[has_demand]),
-            current_counts[has_demand] / provisional_demand[has_demand],
+        # Several reactions may consume the same species, e.g. A -> B and A -> C.
+        # Scale their requested fluxes so total consumption cannot exceed A.
+        requested_outgoing = torch.zeros_like(x)
+        requested_outgoing.index_add_(0, product_sources, requested_flux)
+
+        source_scale = torch.clamp(
+            x / requested_outgoing.clamp_min(1e-12),
+            max=1.0,
+        )
+        flux = requested_flux * source_scale[product_sources]
+
+        outgoing = torch.zeros_like(x)
+        incoming = torch.zeros_like(x)
+
+        outgoing.index_add_(0, product_sources, flux)
+        incoming.index_add_(0, product_nodes, flux)
+
+        x_next = x.clone()
+        x_next[data.species_mask] = (
+            x[data.species_mask]
+            - outgoing[data.species_mask]
+            + incoming[data.species_mask]
         )
 
-        reaction_scale = torch.ones((num_nodes, 1), device=device)
-        reaction_scale.scatter_reduce_(
-            0,
-            react_dst.unsqueeze(-1),
-            species_scale[react_src],
-            reduce="amin",
-            include_self=True,
-        )
-        reaction_extent = reaction_extent * reaction_scale
+        # Reaction nodes are temporary message-passing nodes, not state variables.
+        x_next[~data.species_mask] = 0.0
 
-        # Apply stoichiometric losses and gains.
-        outgoing = torch.zeros((num_nodes, 1), device=device)
-        outgoing.index_add_(
-            0,
-            react_src,
-            react_stoich * reaction_extent[react_dst],
-        )
+        return x_next
 
-        incoming = torch.zeros((num_nodes, 1), device=device)
-        incoming.index_add_(
-            0,
-            product_dst,
-            product_stoich * reaction_extent[product_src],
-        )
-
-        next_counts = (current_counts - outgoing + incoming).clamp_min(0.0)
-        return next_counts[species_mask]
 
 def train(device="cpu", epochs=None):
     dataset = load_dataset()
@@ -296,20 +366,23 @@ def train(device="cpu", epochs=None):
             batch = batch.to(device)
             optimizer.zero_grad()
 
-            state = batch.x[batch.species_mask, 0:1]
+            state = batch.x
             loss = 0.0
 
             for step in range(20):
-                state = model(batch, state)
+                batch.x = state
+                state = model(batch)
+
+                prediction = state[batch.species_mask]
                 target = batch.y[:, step:step + 1]
-                loss = loss + loss_fn(state, target)
+
+                loss = loss + loss_fn(prediction, target)
 
             loss /= 20
             loss.backward()
             optimizer.step()
 
             total_loss += loss.item()
-
 
         avg_loss = total_loss / len(loader)
         print(f"Epoch {epoch + 1}/{epochs}: loss={avg_loss:.6g}")
@@ -327,60 +400,27 @@ def load_model(device="cpu"):
     return model
 
 
-def predict_next_step(model, A, B, C, N0, p_a_to_b, p_a_b_to_c, device="cpu"):
-    graph = create_graph(
-        A=A,
-        B=B,
-        C=C,
-        N0=N0,
-        p_a_to_b=p_a_to_b,
-        p_a_b_to_c=p_a_b_to_c,
-    ).to(device)
-
-    with torch.no_grad():
-        state = graph.x[graph.species_mask, 0:1]
-        pred = model(graph, state).squeeze(-1)
-
-    return pred.cpu().tolist()
-
 def predict_trajectory(
     model,
-    A0,
-    B0,
-    C0,
-    p_trans,
-    p_comb,
+    initial_species_values,
+    reactions,
     steps,
     dt=0.05,
     device="cpu",
 ):
-    A = float(A0)
-    B = float(B0)
-    C = float(C0)
-    N0 = A + B + C
-
-    trajectory = [(0.0, A, B, C)]
+    values = list(map(float, initial_species_values))
+    trajectory = [(0.0, *values)]
 
     with torch.no_grad():
         for step in range(1, steps + 1):
-            graph = create_graph(
-                A=A,
-                B=B,
-                C=C,
-                N0=N0,
-                p_a_to_b=p_trans,
-                p_a_b_to_c=p_comb,
-            ).to(device)
+            graph = create_graph(values, reactions).to(device)
+            pred = model(graph)
 
-            state = graph.x[graph.species_mask, 0:1]
-
-            # Returns counts for species nodes [A, B, C].
-            pred = model(graph, state).squeeze(-1)
-            A, B, C = pred.cpu().tolist()
-
-            trajectory.append((step * dt, A, B, C))
+            values = pred[graph.species_mask].squeeze(-1).cpu().tolist()
+            trajectory.append((step * dt, *values))
 
     return trajectory
+
 
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -390,33 +430,32 @@ if __name__ == "__main__":
 
     model = load_model(device)
 
-    A0 = 320
-    B0 = 80
-    C0 = 0
+    species = ["A", "B", "C", "D", "E"]
+    initial_fractions = [0.1, 0.2, 0.3, 0.2, 0.2]
 
-    p_trans = 0.05  # A -> B
-    p_comb = 0.02   # A + B -> C
+    # A -> B and A -> C
+    reactions = [
+        [0, 1, 0.05],
+        [0, 2, 0.02],
+        [1, 0, 0.03],
+        [4, 1, 0.01],
+        [3, 1, 0.02]
+    ]
 
     trajectory = predict_trajectory(
         model=model,
-        A0=A0,
-        B0=B0,
-        C0=C0,
-        p_trans=p_trans,
-        p_comb=p_comb,
-        steps=int(60 / 0.05),
+        initial_species_values=initial_fractions,
+        reactions=reactions,
+        steps=1200,
         dt=0.05,
         device=device,
     )
-    trajectory = np.asarray(trajectory)
+    trajectory = np.array(trajectory)
 
-    plt.plot(trajectory[:, 0], trajectory[:, 1], label="A")
-    plt.plot(trajectory[:, 0], trajectory[:, 2], label="B")
-    plt.plot(trajectory[:, 0], trajectory[:, 3], label="C")
-
-    plt.xlabel("Time [s]")
-    plt.ylabel("Particle count")
+    for i, name in enumerate(species):
+        plt.plot(trajectory[:, 0], trajectory[:, i+1], label=name)
+    plt.xlabel("Time")
+    plt.ylabel("Count")
     plt.legend()
     plt.tight_layout()
     plt.show()
-
