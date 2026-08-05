@@ -52,9 +52,9 @@ def create_graph(species_values, reactions):
 
     # Species contain their current fraction; reaction nodes start at zero.
     # x = [[0.3], <- species nodes until num_species, current fraction as value
-    #      [0.2], rest are reaction nodes
+    #      [0.2], rest are reaction nodes with value 0
     #      ...
-    #      [p_n]] <- prob of last reaction
+    #      [0]] <- ast reaction, probs are in reaction_p
     x = torch.zeros((num_nodes, 1), dtype=torch.float)
     x[:num_species, 0] = torch.tensor(species_values, dtype=torch.float)
 
@@ -84,9 +84,9 @@ def create_graph(species_values, reactions):
         # store only for the reaction nodes the reaction probability
         reaction_p[reaction_node, 0] = float(p)
 
-    # edges = [[species_node1, reaction_node1], [reaction_node1, species_node2], ...]
-    # torch.tensor(edges).t() = [[species_node1, reaction_node1, ...]  <- All sources
-    #                            [reaction_node1, species_node2, ...]] <- All targets
+    # edges = [[educt1, reaction1], [reaction1, product1], ...]
+    # torch.tensor(edges).t() = [[educt1, reaction1, ...]  <- All sources
+    #                            [reaction1, product1, ...]] <- All targets
     return Data(
         x=x,
         edge_index=torch.tensor(edges, dtype=torch.long).t().contiguous(),
@@ -156,7 +156,9 @@ class ReactionDataset(Dataset):
 def load_dataset():
     if DATASET_PATH.exists():
         logger.info(f"Loading dataset from {DATASET_PATH}")
-        return torch.load(DATASET_PATH, weights_only=False)
+        dataset = torch.load(DATASET_PATH, weights_only=False)
+        logger.info(f"Done loading")
+        return dataset
 
     mapping_file = DATASETS_DIR / f"WDN/{SET_NAME}.csv"
     dataset = ReactionDataset(mapping_file)
@@ -189,74 +191,6 @@ class ReactionGNN(nn.Module):
         )
 
     def forward(self, data):
-        """
-        Shapes of all variables:
-x = [[f_A], <- species nodes until num_species, current fraction as value
-     [f_B], rest are reaction nodes
-      ...
-      p_n]] <- prob of last reaction
-x.size() = [num_species + num_reactions, 1]
-x.size(0) = num_species
-x.size(1) = x.size(-1) = num_reactions
-
-edge_index = [[A,  R1, B,  R2, ...],  <- A, R1, B, ... are indices for x
-              [R1, B,  R2, A, ...]]
-src        =  [A, R1,  B,  R2, ...]
-dst        =  [R1, B,  R2, A, ...]
-
-edge_kind =   [0,  1,  0,  1, ...] <- 0 refers to educt->reaction, 1 to reaction->product
-reactant_edge_mask = [ True, False, True, False, ...]
-product_edge_mask =  [ False, True, False, True, ...]
-
-reactant_src =   src[reactant_edge_mask] = [A, B, ...]
-reaction_nodes = dst[reactant_edge_mask] = [R1, R2, ...]
-
-reaction_ p = [[p1],
-               [p2],
-               ...,
-               [p_n]] <- Probs for the reactions R1, R2, ...
-
-x[reactant_src] = [[f_A],
-                   [f_B],
-                   ....] <- fractions of all educts from the reactions
-reaction_p[reaction_nodes] = [[p_1],
-                              [p_2],
-                              ...]] <- probs of the reactions that have reactant_src as their educts
--> reaction_input = torch.cat([x[reactant_src], reaction_p[reaction_nodes]], dim=-1)
-= [[f_A, p_1],
-   [f_B, p_2],
-   ...] <- array of [educt_fraction, reaction_prob]
-
-reaction_messages = [[v1, v2, ..., v32],
-                     [v1, v2, ..., v32],
-                     ...,] <- 32 values for each [educt fraction, reaction_p] pair
-reaction_messages.size(-1) = 32 (last dimension is number of columns)
-
-index_add explanation:
-let x = torch.zeros((3, 2)) = [[0, 0, 0],
-                               [0, 0, 0]]
-let src = [[1, 2, 3],
-           [4, 5, 6]]
-
-then x.index_add(0, index, src) will iterate i, row in zip(index, src) and add row to the x[i] row
-example: x.index_add(0, [0, 1], src) = [[1, 2, 3],
-                                        [4, 5, 6]]
-         x.index_add(0, [0, 0], src) = [[5, 7, 9],
-                                        [0, 0, 0]]
-the first argument is the dimension, dim=0 -> rows
-dim=1 -> columns, example:
-x.index_add(1, [0, 0, 0], src) = [[6, 0, 0],
-                                  [15, 0, 0]]
-x.index_add(1, [0, 1, 0], src) = [[4, 2, 0],
-                                  [10, 5, 0]]
-
-reaction_hidden = [[0, 0, 0, ..., 0], <- values for species nodes, no input
-                   [0, 0, 0, ..., 0],
-                   ...,
-                   [v1, v2, ..., v32],
-                   [v1, v2, ..., v32]] <- the messages calculated for each [f_X, p_n] pair
-        """
-
         x = data.x
         src, dst = data.edge_index
         edge_kind = data.edge_kind
@@ -274,6 +208,7 @@ reaction_hidden = [[0, 0, 0, ..., 0], <- values for species nodes, no input
             reaction_p[reaction_nodes],
         ], dim=-1)
 
+        # 1. calculate message using [[educt fraction, reaction prob]]
         reaction_messages = self.reactant_mlp(reaction_input)
 
         reaction_hidden = torch.zeros(
@@ -281,7 +216,7 @@ reaction_hidden = [[0, 0, 0, ..., 0], <- values for species nodes, no input
             dtype=x.dtype,
             device=x.device,
         )
-        # this really just adds a row of 32 zeros at the beginning of reaction_messages since the first rows correspond to the species nodes
+        # this really just adds a row of 32 zeros for each species at the beginning of reaction_messages since the first rows correspond to the species nodes
         reaction_hidden.index_add_(0, reaction_nodes, reaction_messages)
 
         # Also pass reactant availability to the reaction node.
@@ -309,9 +244,13 @@ reaction_hidden = [[0, 0, 0, ..., 0], <- values for species nodes, no input
             reaction_p[product_reactions],
         ], dim=-1)
 
-        # Learned fraction of the reaction probability that occurs this step.
+        # 2. let reaction mlp predict flux for educt -> product from
+        # [[32 vals from reactant_mlp, product fraction, reaction prob]]
+        # idea: for multiple educts, add the 32 values for each educt
         reaction_fraction = torch.sigmoid(self.product_mlp(product_input))
 
+        # 3. calculate the actual flux using
+        # predicted_fraction * reaction_prob * educt_fraction
         requested_flux = (
             reaction_fraction
             * reaction_p[product_reactions]
@@ -323,6 +262,7 @@ reaction_hidden = [[0, 0, 0, ..., 0], <- values for species nodes, no input
         requested_outgoing = torch.zeros_like(x)
         requested_outgoing.index_add_(0, product_sources, requested_flux)
 
+        # 4. apply the scaling formula to the flux (see report)
         source_scale = torch.clamp(
             x / requested_outgoing.clamp_min(1e-12),
             max=1.0,
@@ -335,6 +275,8 @@ reaction_hidden = [[0, 0, 0, ..., 0], <- values for species nodes, no input
         outgoing.index_add_(0, product_sources, flux)
         incoming.index_add_(0, product_nodes, flux)
 
+        # 5. subtract outgoing flux from current fractions,
+        # add incoming flux to current fractions
         x_next = x.clone()
         x_next[data.species_mask] = (
             x[data.species_mask]
@@ -342,15 +284,39 @@ reaction_hidden = [[0, 0, 0, ..., 0], <- values for species nodes, no input
             + incoming[data.species_mask]
         )
 
-        # Reaction nodes are temporary message-passing nodes, not state variables.
+        # 6. Set values for reaction nodes to 0 again, they are temporary
         x_next[~data.species_mask] = 0.0
 
         return x_next
 
+    def forward2(self, data):
+        x = data.x
+        src, dst = data.edge_index
+        educt_mask = data.edge_kind == 0
+        product_mask = data.edge_king == 1
+        educt_fractions = x[src[educt_mask]]
+        product_fractions = x[dst[product_mask]]
+        reaction_probs = data.reaction_p[dst[educt_mask]]
+
+        reaction_input = torch.cat([
+            educt_fractions,
+            reaction_probs
+        ])
+        reaction_messages = self.reactant_mlp(reaction_input)
+
+        product_input = torch.cat([
+            reaction_messages,
+            product_fractions,
+            reaction_probs
+        ])
+        predicted_fraction = torch.sigmoid(self.product_mlp(product_input))
+        requested_flux = predicted_fraction * reaction_probs * educt_fractions
+        scale = torch.clamp(x / requ)
+
 
 def train(device="cpu", epochs=None):
     dataset = load_dataset()
-    loader = DataLoader(dataset, batch_size=32, shuffle=True)
+    loader = DataLoader(dataset, batch_size=1, shuffle=True)
 
     model = ReactionGNN().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)

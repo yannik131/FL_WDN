@@ -103,6 +103,15 @@ A graph neural network solves both of these issues. They guarantee that permutat
 
 \insertfigure{figures/reaction_graph_example.jpg}{An example reaction graph with three disc types and two reactions. Disc type properties and reaction probabilities are typically stored as node features.}{fig_reaction_graph_example}
 
+\subsubsection{Scaling the requested flux}
+Suppose the available amount for a reactant is $A$ and the model requests fluxes $F_1,\ddots,F_n$. The reactions can't consume more $A$ than available. The simplest solution is to scale all $F_i$ with a common scaling factor $s$:
+
+\begin{align*}
+    &\sum_i F_i \overset{!}{\le} A\\
+    &\Rightarrow s\sum_i F_i \le A \Leftrightarrow s = \frac{A}{\sum_i F_i}\\
+    &\Rightarrow \text{scale} = \min\left(1, \frac{A}{\sum_i F_i}\right).
+\end{align*}
+
 \section{Results}
 
 \section{Discussion}
