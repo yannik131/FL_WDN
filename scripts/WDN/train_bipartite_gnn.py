@@ -56,18 +56,18 @@ def create_graph(species_values, reactions):
     each graph represents a unique fraction of species
     """
 
-    x = torch.tensor(species_values, dtype=torch.float)
+    x = torch.tensor(species_values, dtype=torch.float).view(-1, 1)
 
     educt_indices = []
     product_indices = []
     reaction_probs = []
 
-    for reaction_idx, (source_idx, target_idx, p) in enumerate(reactions):
-        educt_indices.append([source_idx])
-        product_indices.append([target_idx])
+    for source_idx, target_idx, p in reactions:
+        educt_indices.append(source_idx)
+        product_indices.append(target_idx)
         reaction_probs.append([p])
 
-    return Data(
+    return ReactionData(
         x=x,
         educt_indices=torch.tensor(educt_indices, dtype=torch.long),
         product_indices=torch.tensor(product_indices, dtype=torch.long),
@@ -157,105 +157,7 @@ class ReactionGNN(nn.Module):
 
     def forward(self, data):
         x = data.x
-        src, dst = data.edge_index
-        edge_kind = data.edge_kind
-        reaction_p = data.reaction_p
-
-        reactant_edge_mask = edge_kind == 0
-        product_edge_mask = edge_kind == 1
-
-        # First message-passing phase: species -> reaction.
-        reactant_src = src[reactant_edge_mask]
-        reaction_nodes = dst[reactant_edge_mask]
-
-        reaction_input = torch.cat([
-            x[reactant_src],
-            reaction_p[reaction_nodes],
-        ], dim=-1)
-
-        # 1. calculate message using [[educt fraction, reaction prob]]
-        reaction_messages = self.reactant_mlp(reaction_input)
-
-        reaction_hidden = torch.zeros(
-            (x.size(0), reaction_messages.size(-1)),
-            dtype=x.dtype,
-            device=x.device,
-        )
-        # this really just adds a row of 32 zeros for each species at the beginning of reaction_messages since the first rows correspond to the species nodes
-        reaction_hidden.index_add_(0, reaction_nodes, reaction_messages)
-
-        # Also pass reactant availability to the reaction node.
-        # For current unary reactions, each reaction has exactly one reactant.
-        reactant_amount = torch.zeros_like(x)
-        reactant_amount.index_add_(0, reaction_nodes, x[reactant_src])
-
-        # Map each reaction node back to its reactant species node.
-        reaction_source = torch.full(
-            (x.size(0),),
-            -1,
-            dtype=torch.long,
-            device=x.device,
-        )
-        reaction_source[reaction_nodes] = reactant_src
-
-        # Second message-passing phase: reaction -> product species.
-        product_reactions = src[product_edge_mask]
-        product_nodes = dst[product_edge_mask]
-        product_sources = reaction_source[product_reactions]
-
-        product_input = torch.cat([
-            reaction_hidden[product_reactions],
-            x[product_nodes],
-            reaction_p[product_reactions],
-        ], dim=-1)
-
-        # 2. let reaction mlp predict flux for educt -> product from
-        # [[32 vals from reactant_mlp, product fraction, reaction prob]]
-        # idea: for multiple educts, add the 32 values for each educt
-        reaction_fraction = torch.sigmoid(self.product_mlp(product_input))
-
-        # 3. calculate the actual flux using
-        # predicted_fraction * reaction_prob * educt_fraction
-        requested_flux = (
-            reaction_fraction
-            * reaction_p[product_reactions]
-            * reactant_amount[product_reactions]
-        )
-
-        # Several reactions may consume the same species, e.g. A -> B and A -> C.
-        # Scale their requested fluxes so total consumption cannot exceed A.
-        requested_outgoing = torch.zeros_like(x)
-        requested_outgoing.index_add_(0, product_sources, requested_flux)
-
-        # 4. apply the scaling formula to the flux (see report)
-        source_scale = torch.clamp(
-            x / requested_outgoing.clamp_min(1e-12),
-            max=1.0,
-        )
-        flux = requested_flux * source_scale[product_sources]
-
-        outgoing = torch.zeros_like(x)
-        incoming = torch.zeros_like(x)
-
-        outgoing.index_add_(0, product_sources, flux)
-        incoming.index_add_(0, product_nodes, flux)
-
-        # 5. subtract outgoing flux from current fractions,
-        # add incoming flux to current fractions
-        x_next = x.clone()
-        x_next[data.species_mask] = (
-            x[data.species_mask]
-            - outgoing[data.species_mask]
-            + incoming[data.species_mask]
-        )
-
-        # 6. Set values for reaction nodes to 0 again, they are temporary
-        x_next[~data.species_mask] = 0.0
-
-        return x_next
-
-    def forward2(self, data):
-        reaction_educts = data.x[data.educt_indices]
+        reaction_educts = x[data.educt_indices]
         reaction_input = torch.cat([
             reaction_educts,
             data.reaction_probs
@@ -263,21 +165,20 @@ class ReactionGNN(nn.Module):
         reaction_messages = self.reactant_mlp(reaction_input)
         product_input = torch.cat([
             reaction_messages,
-            data.x[data.product_indices],
+            x[data.product_indices],
             data.reaction_probs
         ], dim=-1)
         predicted_fraction = torch.sigmoid(self.product_mlp(product_input))
         requested_flux = predicted_fraction * data.reaction_probs * reaction_educts
-        requested_outgoing = torch.zeros_like(data.x)
+        requested_outgoing = torch.zeros_like(x)
         requested_outgoing.index_add_(0, data.educt_indices, requested_flux)
-        scale = torch.clamp(data.x / requested_outgoing.clamp_min(1e-12), max=1.0)
+        scale = torch.clamp(x / requested_outgoing.clamp_min(1e-12), max=1.0)
         flux = requested_flux * scale[data.educt_indices]
-        outgoing = torch.zeros_like(data.x)
+        outgoing = torch.zeros_like(x)
         outgoing.index_add_(0, data.educt_indices, flux)
-        incoming = torch.zeros_like(data.x)
+        incoming = torch.zeros_like(x)
         incoming.index_add_(0, data.product_indices, flux)
-        x_next = data.x.clone() - outgoing + incoming
-        return x_next
+        return x - outgoing + incoming
 
 
 def train(device="cpu", epochs=None):

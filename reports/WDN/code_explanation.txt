@@ -319,3 +319,31 @@ x_next (after reset): tensor([[0.2475],
         [0.0000],
         [0.0000],
         [0.0000]], grad_fn=<IndexPutBackward0>)
+
+x = [
+        S1,
+        R1,
+        S2,
+        R2,
+]
+
+data flow:
+FROM HERE: One row for each reaction
+[[educt_fraction, reaction_prob]]
+->
+[[32 vals]]
+->
+[[32 vals, product_fraction, reaction_prob]]
+->
+[[predicted_fraction]]
+->
+[[requested_flux]]
+->
+From here: One row for each species
+[[sum of requested flux for each educt]]
+->
+[[scaled_flux]]
+->
+[[incoming]] and [[outgoing]]
+->
+x_next = x.clone() + incoming - outgoing
