@@ -39,6 +39,15 @@ def resample_counts(df, dt=0.05):
 
     return df_interp
 
+class ReactionData(Data):
+    def __inc__(self, key, value, *args, **kwargs):
+        if key in {
+            'educt_indices',
+            'product_indices',
+        }:
+            return len(self.x)
+        return super().__inc__(key, value, *args, **kwargs)
+
 
 def create_graph(species_values, reactions):
     """
@@ -46,53 +55,23 @@ def create_graph(species_values, reactions):
     reactions: [[source_index, target_index, probability], ...]
     each graph represents a unique fraction of species
     """
-    num_species = len(species_values)
-    num_reactions = len(reactions)
-    num_nodes = num_species + num_reactions
 
-    # Species contain their current fraction; reaction nodes start at zero.
-    # x = [[0.3], <- species nodes until num_species, current fraction as value
-    #      [0.2], rest are reaction nodes with value 0
-    #      ...
-    #      [0]] <- ast reaction, probs are in reaction_p
-    x = torch.zeros((num_nodes, 1), dtype=torch.float)
-    x[:num_species, 0] = torch.tensor(species_values, dtype=torch.float)
+    x = torch.tensor(species_values, dtype=torch.float)
 
-    # helper to later see where species nodes end and where reaction nodes start
-    species_mask = torch.zeros(num_nodes, dtype=torch.bool)
-    species_mask[:num_species] = True
-
-    reaction_p = torch.zeros((num_nodes, 1), dtype=torch.float)
-
-    # each reaction has 2 edges:
-    # A -> R1, edge_kind == 0
-    # R1 -> B, edge_kind == 1
-    edges = []
-    edge_kind = []
+    educt_indices = []
+    product_indices = []
+    reaction_probs = []
 
     for reaction_idx, (source_idx, target_idx, p) in enumerate(reactions):
-        reaction_node = num_species + reaction_idx
+        educt_indices.append([source_idx])
+        product_indices.append([target_idx])
+        reaction_probs.append([p])
 
-        # this is the A -> R1 edge
-        edges.append([source_idx, reaction_node])
-        edge_kind.append(0)
-
-        # R1 -> A edge
-        edges.append([reaction_node, target_idx])
-        edge_kind.append(1)
-
-        # store only for the reaction nodes the reaction probability
-        reaction_p[reaction_node, 0] = float(p)
-
-    # edges = [[educt1, reaction1], [reaction1, product1], ...]
-    # torch.tensor(edges).t() = [[educt1, reaction1, ...]  <- All sources
-    #                            [reaction1, product1, ...]] <- All targets
     return Data(
         x=x,
-        edge_index=torch.tensor(edges, dtype=torch.long).t().contiguous(),
-        edge_kind=torch.tensor(edge_kind, dtype=torch.long),
-        reaction_p=reaction_p,
-        species_mask=species_mask,
+        educt_indices=torch.tensor(educt_indices, dtype=torch.long),
+        product_indices=torch.tensor(product_indices, dtype=torch.long),
+        reaction_probs=torch.tensor(reaction_probs)
     )
 
 class ReactionDataset(Dataset):
@@ -117,17 +96,6 @@ class ReactionDataset(Dataset):
                 print(filename, "resulted in nan")
                 continue
 
-            # species: ['A', 'B', 'C', 'D']
-            # df:
-            #        ElapsedTime[s]     A     B     C     D
-            # 0               0.000  1570   966  2868  2357
-            # 1               0.003  1569   966  2868  2358
-            # values:
-            #           A     B     C     D
-            #   0      1570   966  2868  2357
-            #   1      1569   966  2868  2358
-            # values.iloc[0] = pd Series for the first row
-            # values.iloc[0].to_numpy() = [1570,  966, 2868, 2357]
             values = df[species]
 
             for i in range(len(df) - rollout_steps):
@@ -136,9 +104,6 @@ class ReactionDataset(Dataset):
                     reactions=reactions,
                 )
 
-                # values.iloc[0:2].to_numpy() = [[1570,  966, 2868, 2357],
-                #                                [1569,  966, 2868, 2358]]
-                # values.iloc[0:2].to_numpy().T = [[Values for A], [Values for B], ...]
                 graph.y = torch.tensor(
                     values.iloc[i + 1:i + rollout_steps + 1].to_numpy().T,
                     dtype=torch.float,
@@ -290,28 +255,29 @@ class ReactionGNN(nn.Module):
         return x_next
 
     def forward2(self, data):
-        x = data.x
-        src, dst = data.edge_index
-        educt_mask = data.edge_kind == 0
-        product_mask = data.edge_king == 1
-        educt_fractions = x[src[educt_mask]]
-        product_fractions = x[dst[product_mask]]
-        reaction_probs = data.reaction_p[dst[educt_mask]]
-
+        reaction_educts = data.x[data.educt_indices]
         reaction_input = torch.cat([
-            educt_fractions,
-            reaction_probs
-        ])
+            reaction_educts,
+            data.reaction_probs
+        ], dim=-1)
         reaction_messages = self.reactant_mlp(reaction_input)
-
         product_input = torch.cat([
             reaction_messages,
-            product_fractions,
-            reaction_probs
-        ])
+            data.x[data.product_indices],
+            data.reaction_probs
+        ], dim=-1)
         predicted_fraction = torch.sigmoid(self.product_mlp(product_input))
-        requested_flux = predicted_fraction * reaction_probs * educt_fractions
-        scale = torch.clamp(x / requ)
+        requested_flux = predicted_fraction * data.reaction_probs * reaction_educts
+        requested_outgoing = torch.zeros_like(data.x)
+        requested_outgoing.index_add_(0, data.educt_indices, requested_flux)
+        scale = torch.clamp(data.x / requested_outgoing.clamp_min(1e-12), max=1.0)
+        flux = requested_flux * scale[data.educt_indices]
+        outgoing = torch.zeros_like(data.x)
+        outgoing.index_add_(0, data.educt_indices, flux)
+        incoming = torch.zeros_like(data.x)
+        incoming.index_add_(0, data.product_indices, flux)
+        x_next = data.x.clone() - outgoing + incoming
+        return x_next
 
 
 def train(device="cpu", epochs=None):
