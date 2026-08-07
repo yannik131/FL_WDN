@@ -84,7 +84,7 @@ class ReactionDataset(Dataset):
     def __init__(self, mapping_file):
         super().__init__()
         self.samples = []
-        rollout_steps = 20
+        self.rollout_steps = 20
         logger.info(f"Reading {mapping_file}")
         mapping = pd.read_csv(mapping_file).head(1000)
 
@@ -93,7 +93,8 @@ class ReactionDataset(Dataset):
             species = json.loads(row.species)
             reactions = json.loads(row.reactions)
 
-            df = pd.read_csv(DATASETS_DIR / f"WDN/{SET_NAME}" /  filename)
+            csv_path = DATASETS_DIR / f"WDN/{SET_NAME}" /  filename
+            df = pd.read_csv(csv_path)
             df = resample_counts(df)
 
             if df.isna().any().any():
@@ -102,16 +103,15 @@ class ReactionDataset(Dataset):
 
             values = df[species]
 
-            for i in range(len(df) - rollout_steps):
+            for i in range(len(df) - self.rollout_steps):
                 graph = create_graph(
                     species_values=values.iloc[i].to_numpy(),
                     reactions=reactions,
                 )
 
-                graph.y = torch.tensor(
-                    values.iloc[i + 1:i + rollout_steps + 1].to_numpy().T,
-                    dtype=torch.float,
-                )
+                graph._i = i
+                graph._csv_path = csv_path
+                graph._species = tuple(species)
 
                 self.samples.append(graph)
 
@@ -119,7 +119,14 @@ class ReactionDataset(Dataset):
         return len(self.samples)
 
     def get(self, idx):
-        return self.samples[idx]
+        graph = self.samples[idx]
+        i = graph._i
+        values = read_values(graph._csv_path, graph._species)
+        graph.y = torch.tensor(
+            values.iloc[i + 1:i + self.rollout_steps + 1].to_numpy().T,
+            dtype=torch.float,
+        )
+        return graph
 
 
 def load_dataset():
