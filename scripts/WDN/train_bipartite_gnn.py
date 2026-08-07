@@ -9,7 +9,7 @@ from torch_geometric.data import Data, Dataset
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 from util.paths import DATASETS_DIR, RESULTS_DIR
-
+from functools import lru_cache
 
 logging.basicConfig(
     level=logging.INFO,
@@ -74,6 +74,12 @@ def create_graph(species_values, reactions):
         reaction_probs=torch.tensor(reaction_probs)
     )
 
+@lru_cache(maxsize=100)
+def read_values(path, species):
+    df = pd.read_csv(path)
+    df = resample_counts(df)
+    return df[list(species)]
+
 class ReactionDataset(Dataset):
     def __init__(self, mapping_file):
         super().__init__()
@@ -87,9 +93,7 @@ class ReactionDataset(Dataset):
             species = json.loads(row.species)
             reactions = json.loads(row.reactions)
 
-            df = pd.read_csv(
-                DATASETS_DIR / f"WDN/{SET_NAME}" / filename
-            )
+            df = pd.read_csv(DATASETS_DIR / f"WDN/{SET_NAME}" /  filename)
             df = resample_counts(df)
 
             if df.isna().any().any():
@@ -183,7 +187,7 @@ class ReactionGNN(nn.Module):
 
 def train(device="cpu", epochs=None):
     dataset = load_dataset()
-    loader = DataLoader(dataset, batch_size=1, shuffle=True)
+    loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
     model = ReactionGNN().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
@@ -206,7 +210,7 @@ def train(device="cpu", epochs=None):
                 batch.x = state
                 state = model(batch)
 
-                prediction = state[batch.species_mask]
+                prediction = state
                 target = batch.y[:, step:step + 1]
 
                 loss = loss + loss_fn(prediction, target)
@@ -257,6 +261,7 @@ def predict_trajectory(
 
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Using device: {device}")
 
     if not MODEL_PATH.exists():
         train(device=device, epochs=5)
