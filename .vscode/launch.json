@@ -5,7 +5,7 @@
             "name": "Debug WDN.script",
             "type": "python",
             "request": "launch",
-            "module": "WDN.train_bipartite_gnn",
+            "module": "WDN.run_trans_comb_set",
             "cwd": "${workspaceFolder}/scripts",
             "console": "integratedTerminal"
         }
