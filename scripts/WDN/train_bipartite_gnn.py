@@ -9,7 +9,6 @@ from torch_geometric.data import Data, Dataset
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 from util.paths import DATASETS_DIR, RESULTS_DIR
-from functools import lru_cache
 
 logging.basicConfig(
     level=logging.INFO,
@@ -74,17 +73,11 @@ def create_graph(species_values, reactions):
         reaction_probs=torch.tensor(reaction_probs)
     )
 
-@lru_cache(maxsize=100)
-def read_values(path, species):
-    df = pd.read_csv(path)
-    df = resample_counts(df)
-    return df[list(species)]
-
 class ReactionDataset(Dataset):
     def __init__(self, mapping_file):
         super().__init__()
         self.samples = []
-        self.rollout_steps = 20
+        rollout_steps = 20
         logger.info(f"Reading {mapping_file}")
         mapping = pd.read_csv(mapping_file).head(1000)
 
@@ -93,8 +86,7 @@ class ReactionDataset(Dataset):
             species = json.loads(row.species)
             reactions = json.loads(row.reactions)
 
-            csv_path = DATASETS_DIR / f"WDN/{SET_NAME}" /  filename
-            df = pd.read_csv(csv_path)
+            df = pd.read_csv(DATASETS_DIR / f"WDN/{SET_NAME}" /  filename)
             df = resample_counts(df)
 
             if df.isna().any().any():
@@ -103,15 +95,16 @@ class ReactionDataset(Dataset):
 
             values = df[species]
 
-            for i in range(len(df) - self.rollout_steps):
+            for i in range(len(df) - rollout_steps):
                 graph = create_graph(
                     species_values=values.iloc[i].to_numpy(),
                     reactions=reactions,
                 )
 
-                graph._i = i
-                graph._csv_path = csv_path
-                graph._species = tuple(species)
+                graph.y = torch.tensor(
+                    values.iloc[i + 1:i + rollout_steps + 1].to_numpy().T,
+                    dtype=torch.float,
+                )
 
                 self.samples.append(graph)
 
@@ -119,14 +112,7 @@ class ReactionDataset(Dataset):
         return len(self.samples)
 
     def get(self, idx):
-        graph = self.samples[idx]
-        i = graph._i
-        values = read_values(graph._csv_path, graph._species)
-        graph.y = torch.tensor(
-            values.iloc[i + 1:i + self.rollout_steps + 1].to_numpy().T,
-            dtype=torch.float,
-        )
-        return graph
+        return self.samples[idx]
 
 
 def load_dataset():
@@ -260,7 +246,7 @@ def predict_trajectory(
             graph = create_graph(values, reactions).to(device)
             pred = model(graph)
 
-            values = pred[graph.species_mask].squeeze(-1).cpu().tolist()
+            values = pred.squeeze(-1).cpu().tolist()
             trajectory.append((step * dt, *values))
 
     return trajectory
@@ -275,16 +261,16 @@ if __name__ == "__main__":
 
     model = load_model(device)
 
-    species = ["A", "B", "C", "D", "E"]
-    initial_fractions = [0.1, 0.2, 0.3, 0.2, 0.2]
+    species = ["A", "B", "C", "D", "E", "F"]
+    initial_fractions = [0.1, 0.2, 0.3, 0.2, 0.1, 0.1]
 
-    # A -> B and A -> C
     reactions = [
         [0, 1, 0.05],
         [0, 2, 0.02],
         [1, 0, 0.03],
         [4, 1, 0.01],
-        [3, 1, 0.02]
+        [3, 1, 0.02],
+        [5, 0, 0.01]
     ]
 
     trajectory = predict_trajectory(
