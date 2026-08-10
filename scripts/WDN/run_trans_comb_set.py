@@ -8,6 +8,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import iteround
 import csv
+from pathlib import Path
 
 N_MAX_SPECIES = 5
 N_RUNS = 1000
@@ -24,20 +25,19 @@ class TransCombTask(Task):
         self.filename = filename
 
     def _apply_to_cfg(self, cfg):
-        species_names = [chr(ord('A') + i) for i in self.species]
         cfg['config']['discTypes'] = [
-            {'mass': self.masses[i], 'radius': np.sqrt(self.masses[i]), 'name': species_names[i]}
-            for i in self.species
+            {'mass': self.masses[i], 'radius': np.sqrt(self.masses[i]), 'name': s}
+            for i, s in enumerate(self.species)
         ]
 
-        for fraction, species_name in zip(self.fractions, species_names):
+        for fraction, species_name in zip(self.fractions, self.species):
             cfg['config']['cellMembraneType']['discTypeDistribution'][species_name] = fraction
 
         cfg['config']['reactions'] = []
         for reaction in self.reactions:
-            educt1 = species_names[reaction['educt1']]
-            educt2 = '' if reaction['educt2'] is None else species_names[reaction['educt2']]
-            product1 = species_names[reaction['product1']]
+            educt1 = self.species[reaction['educt1']]
+            educt2 = '' if reaction['educt2'] is None else self.species[reaction['educt2']]
+            product1 = self.species[reaction['product1']]
             cfg['config']['reactions'].append({
                 'educt1': educt1,
                 'educt2': educt2,
@@ -48,7 +48,8 @@ class TransCombTask(Task):
 
 def generate_random_task(filename):
     n_species = np.random.randint(2, N_MAX_SPECIES + 1)
-    species = list(range(n_species))
+    species = [chr(ord('A') + i) for i in range(n_species)]
+    species_idx = list(range(n_species))
     mass_2_prob = np.random.uniform(0.2, 0.8)
     masses = [2 if np.random.random() < mass_2_prob else 1 for _ in species]
 
@@ -56,14 +57,14 @@ def generate_random_task(filename):
     fractions = np.random.dirichlet(alpha=alpha)
 
     edge_prob = np.random.uniform(0.2, 0.8)
-    transformation_edges = list(permutations(species, 2))
+    transformation_edges = list(permutations(species_idx, 2))
     transformation_edges = [
         (A, B) for A, B in transformation_edges
         if masses[A] == masses[B]
     ]
     combination_edges = [
-        (A, B, C) for A, B in combinations_with_replacement(species, 2)
-        for C in species
+        (A, B, C) for A, B in combinations_with_replacement(species_idx, 2)
+        for C in species_idx
     ]
     combination_edges = [
         (A, B, C) for A, B, C in combination_edges
@@ -86,7 +87,7 @@ def generate_random_task(filename):
 
     return TransCombTask(species=species, masses=masses, fractions=fractions, reactions=reactions, filename=filename)
 
-def plot_task(task: TransCombTask):
+def plot_task(task: TransCombTask, path: Path):
     G = nx.MultiDiGraph()
     names = {species: chr(ord("A") + species) for species in task.species}
     G.add_nodes_from(names.values())
@@ -131,11 +132,13 @@ def plot_task(task: TransCombTask):
         connectionstyle=connectionstyle,
     )
 
-    plt.title("TransCombTask")
-    plt.show()
+    plt.title(f"{task.filename}")
+    plt.savefig(path / Path(task.filename).with_suffix('.jpg'), dpi=200)
     plt.close()
 
 mapfile_path = DATASETS_DIR / f"WDN/{SET_NAME}.csv"
+image_dir = DATASETS_DIR / f"WDN/{SET_NAME}_figs/"
+image_dir.mkdir(exist_ok=True)
 tasks = []
 with open(mapfile_path, "w", newline='') as f:
     writer = csv.writer(f)
@@ -143,6 +146,7 @@ with open(mapfile_path, "w", newline='') as f:
     for i in range(N_RUNS):
         filename = f"run_{i:04d}.csv"
         task = generate_random_task(filename)
+        # plot_task(task, image_dir)
         tasks.append(task)
         rounded_fractions = iteround.saferound(task.fractions, 3)
         reactions = []
@@ -166,4 +170,5 @@ with open(CONFIG_DIR / "WDN/trans_comp.json") as f:
 output_dir = DATASETS_DIR / f"WDN/{SET_NAME}"
 
 if __name__ == "__main__":
-    execute_tasks(tasks, cfg, output_dir)
+    # execute_tasks(tasks, cfg, output_dir)
+    pass
