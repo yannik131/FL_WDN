@@ -295,20 +295,22 @@ if __name__ == "__main__":
 
     model = load_model(device)
 
-    species = ["A", "B", "C"]
-    initial_fractions = [1, 0, 0]
+    species = ["A", "B", "C", "D"]
+    initial_fractions = [1, 0, 0, 0]
 
     reactions = [
         [0, 1, 0.1],
         [0, 1, 2, 0.01],
-        [1, 0, 0.02]
+        [1, 0, 0.02],
+        [2, 3, 0.01],
+        [1, 1, 3, 0.02]
     ]
 
     trajectory = predict_trajectory(
         model=model,
         initial_species_values=initial_fractions,
         reactions=reactions,
-        steps=1200,
+        steps=2400,
         dt=0.05,
         device=device,
     )
