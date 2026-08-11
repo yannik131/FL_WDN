@@ -5,7 +5,7 @@
             "name": "Debug WDN.script",
             "type": "python",
             "request": "launch",
-            "module": "WDN.run_trans_comb_set",
+            "module": "WDN.train_full_gnn",
             "cwd": "${workspaceFolder}/scripts",
             "console": "integratedTerminal"
         }

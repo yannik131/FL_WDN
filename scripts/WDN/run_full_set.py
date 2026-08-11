@@ -12,8 +12,8 @@ from pathlib import Path
 from tqdm import tqdm
 
 N_MAX_SPECIES = 5
-N_RUNS = 1000
-SET_NAME = 'full_set_1'
+N_RUNS = 5000
+SET_NAME = 'full_set_2'
 random.seed(42)
 np.random.seed(42)
 
@@ -60,8 +60,8 @@ def generate_random_task(filename):
     fractions = np.random.dirichlet(alpha=alpha)
 
     trans_prob = np.random.uniform(0.4, 0.8)
-    comb_prob = np.random.uniform(0.3, 0.6)
-    exch_prob = np.random.uniform(0.1, 0.2)
+    comb_prob = np.random.uniform(0.1, 0.6)
+    exch_prob = np.random.uniform(0.01, 0.2)
     transformations = [
         [[A], [B]] for A, B in permutations(species_idx, 2)
         if masses[A] == masses[B] and np.random.random() < trans_prob
