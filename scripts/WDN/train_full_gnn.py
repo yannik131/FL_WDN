@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-SET_NAME = 'full_set_1'
+SET_NAME = 'full_set_2'
 MODEL_PATH = RESULTS_DIR / f"WDN/{SET_NAME}.pt"
 DATASET_PATH = DATASETS_DIR / f"WDN/{SET_NAME}.pt"
 
@@ -98,7 +98,7 @@ class ReactionDataset(Dataset):
         self.samples = []
         rollout_steps = 20
         logger.info(f"Reading {mapping_file}")
-        mapping = pd.read_csv(mapping_file).head(1000)
+        mapping = pd.read_csv(mapping_file)
 
         for row in tqdm(mapping.itertuples(index=False), total=len(mapping)):
             filename = row.filename
