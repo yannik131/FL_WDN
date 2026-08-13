@@ -14,7 +14,7 @@ from enum import IntFlag
 from functools import reduce
 from operator import or_
 
-N_MAX_SPECIES = 6
+N_MAX_SPECIES = 10
 N_RUNS = 2000
 SET_NAME = 'full_set_3'
 random.seed(42)
@@ -74,7 +74,7 @@ def plot_task(task: TransCombTask, path: Path):
     for i, species in enumerate(task.species):
         for side, x in (("L", -1), ("R", 1)):
             node = f"{side}{i}"
-            graph.add_node(node, label=species, mass=task.masses[i])
+            graph.add_node(node, label=f"{species}: {task.masses[i]}", mass=task.masses[i])
             pos[node] = (x, species_y[i])
 
     for i, reaction in enumerate(task.reactions):
@@ -95,23 +95,45 @@ def plot_task(task: TransCombTask, path: Path):
         for species in products:
             graph.add_edge(node, f"R{species}", color=color)
 
-    fig, ax = plt.subplots(figsize=(11, max(4, n_reactions * 1.5)))
+    # Remove unconnected species-side nodes.
+    isolated_species_nodes = [
+        node
+        for node in graph.nodes
+        if node.startswith(("L", "R")) and graph.degree(node) == 0
+    ]
+    graph.remove_nodes_from(isolated_species_nodes)
 
-    species_nodes = [f"{side}{i}" for side in "LR" for i in range(n_species)]
-    reaction_nodes = [f"reaction_{i}" for i in range(n_reactions)]
+    for node in isolated_species_nodes:
+        pos.pop(node, None)
+
+    # Redistribute the remaining nodes independently on each side.
+    species_nodes = []
+
+    for side, x in (("L", -1), ("R", 1)):
+        side_nodes = sorted(
+            (node for node in graph.nodes if node.startswith(side)),
+            key=lambda node: int(node[1:]),
+        )
+
+        for node, y in zip(side_nodes, distribute(len(side_nodes))):
+            pos[node] = (x, y)
+
+        species_nodes.extend(side_nodes)
+
+    reaction_nodes = [
+        node
+        for node in graph.nodes
+        if node.startswith("reaction_")
+    ]
+
+    fig, ax = plt.subplots(figsize=(11, max(4, n_reactions * 1.5)))
 
     nx.draw_networkx_nodes(
         graph,
         pos,
         nodelist=species_nodes,
-        node_color=[
-            "lightblue" if graph.nodes[node]["mass"] == 1 else "lightgreen"
-            for node in species_nodes
-        ],
-        node_size=[
-            1200 if graph.nodes[node]["mass"] == 1 else 2000
-            for node in species_nodes
-        ],
+        node_size=2000,
+        node_color="lightblue",
         ax=ax,
     )
     nx.draw_networkx_nodes(
@@ -168,16 +190,18 @@ def sample(arr, N):
 
 def generate_random_task(filename, allowed_reaction_types):
     n_species = np.random.randint(3, N_MAX_SPECIES + 1)
-    species = [chr(ord('A') + i) for i in range(n_species)]
     species_idx = list(range(n_species))
-    mass_2_prob = np.random.uniform(0.2, 0.8)
-    masses = [2 if np.random.random() < mass_2_prob else 1 for _ in species]
+    quantum = np.random.randint(1, 100 // (n_species - 1) + 1)
+    # we'll have at least 2 identical masses and one twice as large to support all reaction types
+    multipliers = [1, 1, 2]
+    for _ in range(n_species - 3):
+        parent_multiplier = random.choice(multipliers)
+        multipliers.append(parent_multiplier + 1)
+    random.shuffle(multipliers)
+    masses = [quantum * multiplier for multiplier in multipliers]
     # if not all entries are equal, all reactions are possible
-    mass_sum = sum(masses)
-    if mass_sum == len(masses):
-        masses[random.randrange(len(masses))] = 2
-    elif mass_sum == 2*len(masses):
-        masses[random.randrange(len(masses))] = 1
+    if len(set(masses)) == 1:
+        masses[0] = min(100, masses[0] + quantum)
 
     # with n species, there are ~ n^2 transformations, ~ n^3 combinations/decompositions
     # and ~ n^4 exchanges possible (very rough, small factors because of mass constraints)
@@ -246,7 +270,7 @@ def generate_random_task(filename, allowed_reaction_types):
             for side in reaction['indices']
         ]
 
-    species = [species[i] for i in used_indices]
+    species = [chr(ord('A') + i) for i in range(len(used_indices))]
     masses = [masses[i] for i in used_indices]
 
     alpha = np.random.uniform(0.1, 3, size=len(species))
