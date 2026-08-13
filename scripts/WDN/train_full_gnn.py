@@ -98,7 +98,7 @@ class ReactionDataset(Dataset):
         self.samples = []
         rollout_steps = 20
         logger.info(f"Reading {mapping_file}")
-        mapping = pd.read_csv(mapping_file)
+        mapping = pd.read_csv(mapping_file).head(2000)
 
         for row in tqdm(mapping.itertuples(index=False), total=len(mapping)):
             filename = row.filename
