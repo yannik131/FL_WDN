@@ -10,6 +10,22 @@ from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 from util.paths import DATASETS_DIR, RESULTS_DIR
 
+"""
+1. Create dataset:
+Runs 	Reaction types
+500 	1
+500 	2
+500 	3–4
+500 	4
+
+2. Split into train/test before training by file to avoid overlap
+
+3. Create one reference simulation for each of the 4 dataset parts, run simulation 1000x, compare with average
+
+4. Compare with complex water reference (1000x averaged). Use MSE.
+"""
+
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s: %(message)s",
@@ -17,7 +33,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-SET_NAME = 'full_set_2'
+SET_NAME = 'full_set_3'
 MODEL_PATH = RESULTS_DIR / f"WDN/{SET_NAME}.pt"
 DATASET_PATH = DATASETS_DIR / f"WDN/{SET_NAME}.pt"
 
@@ -98,7 +114,7 @@ class ReactionDataset(Dataset):
         self.samples = []
         rollout_steps = 20
         logger.info(f"Reading {mapping_file}")
-        mapping = pd.read_csv(mapping_file).head(2000)
+        mapping = pd.read_csv(mapping_file)
 
         for row in tqdm(mapping.itertuples(index=False), total=len(mapping)):
             filename = row.filename

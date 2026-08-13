@@ -2,7 +2,7 @@ import json
 from util.paths import CONFIG_DIR, DATASETS_DIR
 from util.task import Task, execute_tasks
 import numpy as np
-from itertools import permutations, combinations_with_replacement
+from itertools import permutations, combinations_with_replacement, combinations
 import random
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -10,10 +10,13 @@ import iteround
 import csv
 from pathlib import Path
 from tqdm import tqdm
+from enum import IntFlag
+from functools import reduce
+from operator import or_
 
-N_MAX_SPECIES = 5
-N_RUNS = 5000
-SET_NAME = 'full_set_2'
+N_MAX_SPECIES = 6
+N_RUNS = 2000
+SET_NAME = 'full_set_3'
 random.seed(42)
 np.random.seed(42)
 
@@ -49,59 +52,23 @@ class TransCombTask(Task):
                 'probability': reaction['p']
             })
 
-def generate_random_task(filename):
-    n_species = np.random.randint(2, N_MAX_SPECIES + 1)
-    species = [chr(ord('A') + i) for i in range(n_species)]
-    species_idx = list(range(n_species))
-    mass_2_prob = np.random.uniform(0.2, 0.8)
-    masses = [2 if np.random.random() < mass_2_prob else 1 for _ in species]
-
-    alpha = np.random.uniform(0.1, 3, size=len(species))
-    fractions = np.random.dirichlet(alpha=alpha)
-
-    trans_prob = np.random.uniform(0.4, 0.8)
-    comb_prob = np.random.uniform(0.1, 0.6)
-    exch_prob = np.random.uniform(0.01, 0.2)
-    transformations = [
-        [[A], [B]] for A, B in permutations(species_idx, 2)
-        if masses[A] == masses[B] and np.random.random() < trans_prob
-    ]
-    combinations = [
-        [[A, B], [C]] for A, B in combinations_with_replacement(species_idx, 2)
-        for C in species_idx
-        if masses[A] + masses[B] == masses[C]
-    ]
-    decompositions = [reaction[::-1] for reaction in combinations]
-    exchanges = [
-        [[A, B], [C, D]] for A, B in combinations_with_replacement(species_idx, 2)
-        for C, D in combinations_with_replacement(species_idx, 2)
-        if masses[A] + masses[B] == masses[C] + masses[D] if (A, B) != (C, D)
-    ]
-
-    edges = [r for r in transformations if np.random.random() < trans_prob] + \
-            [r for r in combinations if np.random.random() < comb_prob] + \
-            [r for r in decompositions if np.random.random() < comb_prob] + \
-            [r for r in exchanges if np.random.random() < exch_prob]
-
-    if len(edges) == 0:
-        try:
-            edges = [random.choice(transformations + combinations + decompositions + exchanges)]
-        except:
-            print(f"Fatal error: No reactions for n_species={n_species} and masses={masses}")
-            exit(0)
-
-    reactions = []
-    for edge in edges:
-        reaction = dict(indices=edge, p=10**np.random.uniform(-3, -1))
-        reactions.append(reaction)
-
-    return TransCombTask(species=species, masses=masses, fractions=fractions, reactions=reactions, filename=filename)
-
-
 def plot_task(task: TransCombTask, path: Path):
     graph = nx.DiGraph()
     n_species, n_reactions = len(task.species), len(task.reactions)
-    species_y = np.linspace(0, max(n_reactions - 1, 1), n_species)
+
+    # Keep a non-zero vertical span, including for one reaction.
+    y_min = 0.0
+    y_max = float(max(n_reactions - 1, 1))
+
+    def distribute(count: int) -> np.ndarray:
+        if count == 0:
+            return np.array([])
+        if count == 1:
+            return np.array([(y_min + y_max) / 2])
+        return np.linspace(y_min, y_max, count)
+
+    species_y = distribute(n_species)
+    reaction_y = distribute(n_reactions)
 
     pos = {}
     for i, species in enumerate(task.species):
@@ -121,7 +88,7 @@ def plot_task(task: TransCombTask, path: Path):
         )
 
         graph.add_node(node, label=equation)
-        pos[node] = (0, i)
+        pos[node] = (0, reaction_y[i])
 
         for species in educts:
             graph.add_edge(f"L{species}", node, color=color)
@@ -129,11 +96,14 @@ def plot_task(task: TransCombTask, path: Path):
             graph.add_edge(node, f"R{species}", color=color)
 
     fig, ax = plt.subplots(figsize=(11, max(4, n_reactions * 1.5)))
+
     species_nodes = [f"{side}{i}" for side in "LR" for i in range(n_species)]
     reaction_nodes = [f"reaction_{i}" for i in range(n_reactions)]
 
     nx.draw_networkx_nodes(
-        graph, pos, nodelist=species_nodes,
+        graph,
+        pos,
+        nodelist=species_nodes,
         node_color=[
             "lightblue" if graph.nodes[node]["mass"] == 1 else "lightgreen"
             for node in species_nodes
@@ -142,30 +112,162 @@ def plot_task(task: TransCombTask, path: Path):
             1200 if graph.nodes[node]["mass"] == 1 else 2000
             for node in species_nodes
         ],
-        ax=ax
+        ax=ax,
     )
     nx.draw_networkx_nodes(
-        graph, pos, nodelist=reaction_nodes,
-        node_shape="s", node_color="white",
-        edgecolors="black", node_size=4000, ax=ax,
+        graph,
+        pos,
+        nodelist=reaction_nodes,
+        node_shape="s",
+        node_color="white",
+        edgecolors="black",
+        node_size=4000,
+        ax=ax,
     )
     nx.draw_networkx_edges(
-        graph, pos,
+        graph,
+        pos,
         edge_color=[data["color"] for _, _, data in graph.edges(data=True)],
-        width=1.5, arrows=True, arrowsize=12, ax=ax,
+        width=1.5,
+        arrows=True,
+        arrowsize=12,
+        ax=ax,
     )
     nx.draw_networkx_labels(
-        graph, pos,
+        graph,
+        pos,
         labels={node: data["label"] for node, data in graph.nodes(data=True)},
-        font_size=8, ax=ax,
+        font_size=8,
+        ax=ax,
     )
+
+    # Must be set after NetworkX has performed its autoscaling.
+    y_padding = 0.35
+    ax.set_ylim(y_min - y_padding, y_max + y_padding)
 
     ax.set_title(task.filename)
     ax.axis("off")
     fig.tight_layout()
-    fig.savefig(path / Path(task.filename).with_suffix(".jpg"), dpi=200)
+    fig.savefig(path / Path(task.filename).with_suffix(".jpg"), dpi=100)
     plt.close(fig)
 
+class ReactionType(IntFlag):
+    transformation = 1 << 0
+    combination = 1 << 1
+    decomposition = 1 << 2
+    exchange = 1 << 3
+
+def reaction_type_str(reaction_type):
+    names = [x.name for x in ReactionType if x & reaction_type]
+    return "|".join(names)
+
+def sample(arr, N):
+    if len(arr) <= N:
+        return arr
+    return random.sample(arr, N)
+
+def generate_random_task(filename, allowed_reaction_types):
+    n_species = np.random.randint(3, N_MAX_SPECIES + 1)
+    species = [chr(ord('A') + i) for i in range(n_species)]
+    species_idx = list(range(n_species))
+    mass_2_prob = np.random.uniform(0.2, 0.8)
+    masses = [2 if np.random.random() < mass_2_prob else 1 for _ in species]
+    # if not all entries are equal, all reactions are possible
+    mass_sum = sum(masses)
+    if mass_sum == len(masses):
+        masses[random.randrange(len(masses))] = 2
+    elif mass_sum == 2*len(masses):
+        masses[random.randrange(len(masses))] = 1
+
+    # with n species, there are ~ n^2 transformations, ~ n^3 combinations/decompositions
+    # and ~ n^4 exchanges possible (very rough, small factors because of mass constraints)
+    transformations = [
+        [[A], [B]] for A, B in permutations(species_idx, 2)
+        if masses[A] == masses[B]
+    ]
+    combinations = [
+        [[A, B], [C]] for A, B in combinations_with_replacement(species_idx, 2)
+        for C in species_idx
+        if masses[A] + masses[B] == masses[C]
+    ]
+    decompositions = [reaction[::-1] for reaction in combinations]
+    exchanges = [
+        [[A, B], [C, D]] for A, B in combinations_with_replacement(species_idx, 2)
+        for C, D in combinations_with_replacement(species_idx, 2)
+        if masses[A] + masses[B] == masses[C] + masses[D] and (A, B) != (C, D)
+    ]
+
+    # avoid overrepresentations of reaction types with many possible edges
+    lengths = [len(transformations), len(decompositions), len(combinations), len(exchanges)]
+    lengths = [l for l in lengths if l > 0]
+    N_min = min(lengths)
+    transformations = sample(transformations, N_min) if (allowed_reaction_types & ReactionType.transformation) else []
+    combinations = sample(combinations, N_min) if (allowed_reaction_types & ReactionType.combination) else []
+    decompositions = sample(decompositions, N_min) if (allowed_reaction_types & ReactionType.decomposition) else []
+    exchanges = sample(exchanges, N_min) if (allowed_reaction_types & ReactionType.exchange) else []
+
+    N_reactions = len(transformations) + len(combinations) + len(decompositions) + len(exchanges)
+    if N_reactions == 0:
+        print(f"Fatal error: No reactions for n_species={n_species} and masses={masses} and allowed={reaction_type_str(allowed_reaction_types)}={allowed_reaction_types}")
+        exit(0)
+
+    sparsity_prob = np.random.random()
+    if sparsity_prob < 0.25:
+        edge_prob = min(1.0, 2.0 / N_reactions)
+    elif sparsity_prob < 0.75:
+        edge_prob = min(1.0, 5.0 / N_reactions)
+    else:
+        edge_prob = min(1.0, 10.0 / N_reactions)
+
+    edges = [r for r in transformations if np.random.random() < edge_prob] + \
+            [r for r in combinations if np.random.random() < edge_prob] + \
+            [r for r in decompositions if np.random.random() < edge_prob] + \
+            [r for r in exchanges if np.random.random() < edge_prob]
+
+    if len(edges) == 0:
+        edges = [random.choice(transformations + combinations + decompositions + exchanges)]
+
+    reactions = []
+    for edge in edges:
+        reaction = dict(indices=edge, p=10**np.random.uniform(-3, -1))
+        reactions.append(reaction)
+
+    used_indices = {
+        i for reaction in reactions
+        for side in reaction['indices']
+        for i in side
+    }
+    used_indices = list(used_indices)
+    mapping = {old: new for new, old in enumerate(used_indices)}
+
+    for reaction in reactions:
+        reaction['indices'] = [
+            [mapping[i] for i in side]
+            for side in reaction['indices']
+        ]
+
+    species = [species[i] for i in used_indices]
+    masses = [masses[i] for i in used_indices]
+
+    alpha = np.random.uniform(0.1, 3, size=len(species))
+    fractions = np.random.dirichlet(alpha=alpha)
+
+    return TransCombTask(species=species, masses=masses, fractions=fractions, reactions=reactions, filename=filename)
+
+def generate_tasks():
+    tasks = []
+    reaction_types = [ReactionType.transformation, ReactionType.combination, ReactionType.decomposition, ReactionType.exchange]
+    each = int(N_RUNS / 4)
+
+    for allowed_type_count in [1, 2, 3, 4]:
+        valid_combinations = list(combinations(reaction_types, allowed_type_count))
+        count_for_each_combination = int(each / len(valid_combinations))
+        for comb in valid_combinations:
+            flag = reduce(or_, comb)
+            for _ in range(count_for_each_combination):
+                tasks.append(generate_random_task(f"{len(tasks):04d}.csv", flag))
+
+    return tasks
 
 mapfile_path = DATASETS_DIR / f"WDN/{SET_NAME}.csv"
 image_dir = DATASETS_DIR / f"WDN/{SET_NAME}_figs/"
@@ -174,18 +276,16 @@ tasks = []
 with open(mapfile_path, "w", newline='') as f:
     writer = csv.writer(f)
     writer.writerow(["filename", "species", "masses", "fractions", "reactions"])
-    for i in tqdm(list(range(N_RUNS))):
-        filename = f"run_{i:04d}.csv"
-        task = generate_random_task(filename)
+    tasks = generate_tasks()
+    for task in tqdm(tasks):
         # plot_task(task, image_dir)
-        tasks.append(task)
         rounded_fractions = iteround.saferound(task.fractions, 3)
         reactions = []
         for reaction in task.reactions:
             reactions.append([reaction['indices'], reaction['p']])
 
         writer.writerow([
-            filename,
+            task.filename,
             json.dumps(task.species),
             json.dumps(task.masses),
             json.dumps(rounded_fractions),
@@ -198,4 +298,5 @@ with open(CONFIG_DIR / "WDN/trans_comp.json") as f:
 output_dir = DATASETS_DIR / f"WDN/{SET_NAME}"
 
 if __name__ == "__main__":
+    pass
     execute_tasks(tasks, cfg, output_dir)
