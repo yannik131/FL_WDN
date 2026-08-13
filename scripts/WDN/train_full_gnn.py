@@ -9,22 +9,7 @@ from torch_geometric.data import Data, Dataset
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 from util.paths import DATASETS_DIR, RESULTS_DIR
-
-"""
-1. Create dataset:
-Runs 	Reaction types
-500 	1
-500 	2
-500 	3–4
-500 	4
-
-2. Split into train/test before training by file to avoid overlap
-
-3. Create one reference simulation for each of the 4 dataset parts, run simulation 1000x, compare with average
-
-4. Compare with complex water reference (1000x averaged). Use MSE.
-"""
-
+from sklearn.model_selection import train_test_split
 
 logging.basicConfig(
     level=logging.INFO,
@@ -35,7 +20,8 @@ logger = logging.getLogger(__name__)
 
 SET_NAME = 'full_set_3'
 MODEL_PATH = RESULTS_DIR / f"WDN/{SET_NAME}.pt"
-DATASET_PATH = DATASETS_DIR / f"WDN/{SET_NAME}.pt"
+TRAIN_DATASET_PATH = DATASETS_DIR / f"WDN/{SET_NAME}_train.pt"
+TEST_DATASET_PATH = DATASETS_DIR / f"WDN/{SET_NAME}_test.pt"
 
 
 def resample_counts(df, dt=0.05):
@@ -66,14 +52,16 @@ class ReactionData(Data):
         return super().__inc__(key, value, *args, **kwargs)
 
 
-def create_graph(species_values, reactions):
+def create_graph(species_values, masses, reactions):
     """
     species_values: sequence such as [A, B, C], each entry a fraction in [0, 1]
+    masses: [mass1, mass2, ...]
     reactions: [[[educt indices], [product indices]], prob]
     each graph represents a unique fraction of species
     """
 
     x = torch.tensor(species_values, dtype=torch.float).view(-1, 1)
+    masses = torch.tensor(masses, dtype=torch.float).view(-1, 1)
 
     educt1_indices = []
     educt2_indices = []
@@ -99,6 +87,7 @@ def create_graph(species_values, reactions):
 
     return ReactionData(
         x=x,
+        masses=masses,
         educt1_indices=torch.tensor(educt1_indices, dtype=torch.long),
         educt2_indices=torch.tensor(educt2_indices, dtype=torch.long),
         product1_indices=torch.tensor(product1_indices, dtype=torch.long),
@@ -109,16 +98,15 @@ def create_graph(species_values, reactions):
     )
 
 class ReactionDataset(Dataset):
-    def __init__(self, mapping_file):
+    def __init__(self, mapping):
         super().__init__()
         self.samples = []
         rollout_steps = 20
-        logger.info(f"Reading {mapping_file}")
-        mapping = pd.read_csv(mapping_file)
 
         for row in tqdm(mapping.itertuples(index=False), total=len(mapping)):
             filename = row.filename
             species = json.loads(row.species)
+            masses = json.loads(row.masses)
             reactions = json.loads(row.reactions)
 
             df = pd.read_csv(DATASETS_DIR / f"WDN/{SET_NAME}" /  filename)
@@ -132,6 +120,7 @@ class ReactionDataset(Dataset):
             for i in range(len(df) - rollout_steps):
                 graph = create_graph(
                     species_values=values.iloc[i].to_numpy(),
+                    masses=masses,
                     reactions=reactions,
                 )
 
@@ -150,19 +139,24 @@ class ReactionDataset(Dataset):
 
 
 def load_dataset():
-    if DATASET_PATH.exists():
-        logger.info(f"Loading dataset from {DATASET_PATH}")
-        dataset = torch.load(DATASET_PATH, weights_only=False)
+    if TRAIN_DATASET_PATH.exists():
+        logger.info(f"Loading dataset from {TRAIN_DATASET_PATH}")
+        train_dataset = torch.load(TRAIN_DATASET_PATH, weights_only=False)
+        test_dataset = torch.load(TEST_DATASET_PATH, weights_only=False)
         logger.info(f"Done loading")
-        return dataset
+        return train_dataset, test_dataset
 
     mapping_file = DATASETS_DIR / f"WDN/{SET_NAME}.csv"
-    dataset = ReactionDataset(mapping_file)
+    mapping = pd.read_csv(mapping_file)
+    train_mapping, test_mapping = train_test_split(mapping, test_size=0.1, random_state=42, shuffle=True)
+    train_dataset = ReactionDataset(train_mapping)
+    test_dataset = ReactionDataset(test_mapping)
 
-    logger.info(f"Saving dataset to {DATASET_PATH}")
-    torch.save(dataset, DATASET_PATH)
+    logger.info(f"Saving dataset to {TRAIN_DATASET_PATH}")
+    torch.save(train_dataset, TRAIN_DATASET_PATH)
+    torch.save(test_dataset, TEST_DATASET_PATH)
     logger.info("Done saving")
-    return dataset
+    return train_dataset, test_dataset
 
 
 class ReactionGNN(nn.Module):
@@ -170,9 +164,9 @@ class ReactionGNN(nn.Module):
         super().__init__()
 
         # Message from a reactant species to its reaction node.
-        # Input: [reactant_fraction, reaction_probability]
+        # Input: [reactant_fraction, mass, reaction_probability]
         self.reactant_mlp = nn.Sequential(
-            nn.Linear(2, 32),
+            nn.Linear(3, 32),
             nn.ReLU(),
             nn.Linear(32, 32),
             nn.ReLU(),
@@ -190,10 +184,12 @@ class ReactionGNN(nn.Module):
         x = data.x
         educt1 = x[data.educt1_indices]
         educt2 = x[data.educt2_indices]
+        educt1_mass = data.masses[data.educt1_indices]
+        educt2_mass = data.masses[data.educt2_indices]
         product1 = x[data.product1_indices]
         product2 = x[data.product2_indices]
-        educt_input1 = torch.cat([educt1, data.reaction_probs], dim=-1)
-        educt_input2 = torch.cat([educt2, data.reaction_probs], dim=-1)
+        educt_input1 = torch.cat([educt1, educt1_mass, data.reaction_probs], dim=-1)
+        educt_input2 = torch.cat([educt2, educt2_mass, data.reaction_probs], dim=-1)
         msg1 = self.reactant_mlp(educt_input1)
         msg2 = self.reactant_mlp(educt_input2)
         reaction_messages = msg1 + data.has_2_educts * msg2
@@ -228,54 +224,67 @@ class ReactionGNN(nn.Module):
         incoming.index_add_(0, data.product2_indices, flux * data.has_2_products)
         return x - outgoing + incoming
 
+def rollout_loss(model, batch, loss_fn, rollout_steps=20):
+    state = batch.x
+    loss = 0.0
+    for step in range(rollout_steps):
+        batch.x = state
+        state = model(batch)
+        if not torch.isfinite(state).all():
+            raise RuntimeError(f'Non-finite prediction at rollout step {step}')
+
+        target = batch.y[:, step:step + 1]
+
+        loss = loss + loss_fn(state, target)
+        if not torch.isfinite(loss):
+            raise RuntimeError('Loss is non-finite')
+
+    return loss / rollout_steps
+
+def evaluate(model, loader, loss_fn, device):
+    model.eval()
+    total_loss = 0.0
+    with torch.no_grad():
+        for batch in loader:
+            batch = batch.to(device)
+            loss = rollout_loss(model, batch, loss_fn)
+            total_loss += loss.item()
+
+    return total_loss / len(loader)
 
 def train(device="cpu", epochs=None):
-    dataset = load_dataset()
-    loader = DataLoader(dataset, batch_size=32, shuffle=True)
+    train_dataset, test_dataset = load_dataset()
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 
     model = ReactionGNN().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     loss_fn = nn.MSELoss()
 
-    print(f"Number of batches: {len(loader)}")
+    print(f"Number of batches: {len(train_loader)}")
 
     for epoch in range(epochs):
         model.train()
         total_loss = 0.0
 
-        for batch in tqdm(loader, leave=False):
+        for batch in tqdm(train_loader, leave=False):
             batch = batch.to(device)
             optimizer.zero_grad()
 
-            state = batch.x
-            loss = 0.0
-
-            for step in range(20):
-                batch.x = state
-                state = model(batch)
-                if not torch.isfinite(state).all():
-                    raise RuntimeError(f'Non-finite prediction at rollout step {step}')
-
-                prediction = state
-                target = batch.y[:, step:step + 1]
-
-                loss = loss + loss_fn(prediction, target)
-                if not torch.isfinite(loss):
-                    raise RuntimeError('Loss is non-finite')
-
-            loss /= 20
+            loss = rollout_loss(model, batch, loss_fn)
             loss.backward()
             optimizer.step()
 
             total_loss += loss.item()
 
-        avg_loss = total_loss / len(loader)
+        avg_loss = total_loss / len(train_loader)
         print(f"Epoch {epoch + 1}/{epochs}: loss={avg_loss:.6g}")
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), MODEL_PATH)
     logger.info(f"Saved model to {MODEL_PATH}")
-
+    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=True)
+    test_loss = evaluate(model, test_loader, loss_fn, device)
+    print(f"Test loss: {test_loss:.6g}")
 
 def load_model(device="cpu"):
     model = ReactionGNN().to(device)
@@ -288,6 +297,7 @@ def load_model(device="cpu"):
 def predict_trajectory(
     model,
     initial_species_values,
+    masses,
     reactions,
     steps,
     dt=0.05,
@@ -298,7 +308,7 @@ def predict_trajectory(
 
     with torch.no_grad():
         for step in range(1, steps + 1):
-            graph = create_graph(values, reactions).to(device)
+            graph = create_graph(values, masses, reactions).to(device)
             pred = model(graph)
 
             values = pred.squeeze(-1).cpu().tolist()
@@ -319,6 +329,7 @@ if __name__ == "__main__":
     species = ["A", "B", "C", "D"]
     initial_fractions = [1, 0, 0, 0]
 
+    masses = [1, 1, 2, 2]
     reactions = [
         [[[0], [1]], 0.1],
         [[[0, 1], [2]], 0.01],
@@ -330,6 +341,7 @@ if __name__ == "__main__":
     trajectory = predict_trajectory(
         model=model,
         initial_species_values=initial_fractions,
+        masses=masses,
         reactions=reactions,
         steps=1200,
         dt=0.05,
