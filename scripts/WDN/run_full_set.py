@@ -34,8 +34,10 @@ class TransCombTask(Task):
             for i, s in enumerate(self.species)
         ]
 
-        for fraction, species_name in zip(self.fractions, self.species):
-            cfg['config']['cellMembraneType']['discTypeDistribution'][species_name] = fraction
+        cfg['config']['cellMembraneType']['discTypeDistribution'] = {
+            species_name: float(fraction)
+            for fraction, species_name in zip(self.fractions, self.species)
+        }
 
         cfg['config']['reactions'] = []
         for reaction in self.reactions:
@@ -261,7 +263,7 @@ def generate_random_task(filename, allowed_reaction_types):
         for side in reaction['indices']
         for i in side
     }
-    used_indices = list(used_indices)
+    used_indices = sorted(used_indices)
     mapping = {old: new for new, old in enumerate(used_indices)}
 
     for reaction in reactions:
