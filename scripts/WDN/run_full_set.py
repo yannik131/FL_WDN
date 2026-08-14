@@ -13,6 +13,7 @@ from tqdm import tqdm
 from enum import IntFlag
 from functools import reduce
 from operator import or_
+from scipy.stats import truncnorm
 
 N_MAX_SPECIES = 10
 N_RUNS = 2000
@@ -190,6 +191,21 @@ def sample(arr, N):
         return arr
     return random.sample(arr, N)
 
+def sample_p(eps=1e-3):
+    r = np.random.rand()
+
+    if r < 0.70:
+        mean, std = 0.1, 0.05
+    elif r < 0.90:
+        mean, std = 0.9, 0.05
+    else:
+        mean, std = 0.5, 0.20
+
+    a = (eps - mean) / std
+    b = (1 - eps - mean) / std
+
+    return truncnorm.rvs(a, b, loc=mean, scale=std)
+
 def generate_random_task(filename, allowed_reaction_types):
     n_species = np.random.randint(3, N_MAX_SPECIES + 1)
     species_idx = list(range(n_species))
@@ -255,7 +271,7 @@ def generate_random_task(filename, allowed_reaction_types):
 
     reactions = []
     for edge in edges:
-        reaction = dict(indices=edge, p=10**np.random.uniform(-3, -1))
+        reaction = dict(indices=edge, p=sample_p())
         reactions.append(reaction)
 
     used_indices = {
