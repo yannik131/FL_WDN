@@ -154,8 +154,6 @@ def plot_task(task: TransCombTask, path: Path):
         pos,
         edge_color=[data["color"] for _, _, data in graph.edges(data=True)],
         width=1.5,
-        arrows=True,
-        arrowsize=12,
         ax=ax,
     )
     nx.draw_networkx_labels(
@@ -320,7 +318,7 @@ with open(mapfile_path, "w", newline='') as f:
     writer.writerow(["filename", "species", "masses", "fractions", "reactions"])
     tasks = generate_tasks()
     for task in tqdm(tasks):
-        # plot_task(task, image_dir)
+        plot_task(task, image_dir)
         rounded_fractions = iteround.saferound(task.fractions, 3)
         reactions = []
         for reaction in task.reactions:
@@ -340,4 +338,5 @@ with open(CONFIG_DIR / "WDN/trans_comp.json") as f:
 output_dir = DATASETS_DIR / f"WDN/{SET_NAME}"
 
 if __name__ == "__main__":
-    execute_tasks(tasks, cfg, output_dir)
+    # execute_tasks(tasks, cfg, output_dir)
+    pass

@@ -88,10 +88,87 @@
 
 \section{Introduction}
 
+\subsection{Motivation}
+Predicting concentration changes of molecules in solution based on the present network of chemical reactions is a challenging problem with various practical applications. [List of applications here]. Simulating the physics of millions of particles in real time by far exceeds the computational capabilities of modern software.
+A possible approach to predict dynamics of reaction networks is the use of deep learning models. (Another would be statistical physics. When is which approach preferred? Isn't physics/physical chemistry capable of predicting dynamics? I guess any model based on physics/chemistry ends up with differential equations? Or the chemical master equation?). To train such models, simulated reaction data can be used.
+In 2025, I started developing a simulation software for reaction networks called \textit{Cell}~\cite{cell}. The software simulates collisions of circular 2D particles, so-called \textit{Discs}, and reactions thereof.
+The goal of this project is to train a model using datasets created with the \textit{Cell} simulation project to predict particle trajectories over time for any given reaction network. Even though the simulation is not meant to accurately reflect molecular physics, it is similar enough to a real system to give insight into how deep learning models can be trained to simulate real systems. Additionally, since the simulation is very simplistic, generating datasets doesn't take much time.
+
+\subsection{The simulation}
+\subsubsection{Configurations}
+\textit{Cell} is a simple, collision-based reaction network simulator. The various properties of a simulation can be saved as a \path{.json} configuration file using the GUI. The GUI can run the simulation and display the current state and particle counts in real time. The main output of the simulation are the particle counts over time, as visible in the right-hand side of the screenshot in \cref{fig_cell_screenshot}.
+
+\insertfigure{figures/cell_screenshot.png}{Screenshot of the cell simulation software. The simulation widget on the left shows the simulation state in real time. The plot widget on the right-hand side shows the disc counts over time.}{fig_cell_screenshot}
+
+A CLI of the simulation is also available. It takes the configuration file path and the desired simulation duration as parameters and creates a \path{.csv} file containing the particle counts evaluated at each simulation time step. Since the configuration is the main input of the simulation, it also served as the main input of the deep learning model. It consists of the following parameters.
+
+\subsubsection*{Discs}
+The particles in the simulation are called \textit{discs}. The physical properties of discs are determined by their disc type $d = \{\text{name}, r, m\}$, where $r$ and $m$ are the radius (in px) and mass (dimensionless) of the type. To conserve total disc area, $r = \sqrt{m}$ was set for all disc types in the context of this project. The set of all disc types is called $D = \{d_1, \hdots, d_M\}$.
+
+\subsubsection*{Simulation size and distribution}
+The simulation runs in a circular confinement of radius $R$ (in px) with a total number of $N$ discs. Once disc types are defined, the initial disc type distribution $f = \{f_1, \hdots, f_M\}$ with $M = |D|$ can be specified. It assigns a relative frequency to each disc type. Using the largest disc type radius as the edge length, a square lattice spanning the confinement is calculated and discs according to their relative frequencies are randomly distributed across the grid until either the desired count $N$ or the total lattice capacity is reached.
+
+\subsubsection*{Reactions}
+The simulation supports four different reaction types: Transformation reactions $A\rightarrow B$, decomposition reactions $A \rightarrow B + C$, combination reactions $A+B \rightarrow C$ and exchange reactions $A+B \rightarrow C + D$. The simulation does not allow reactions where educt and product masses are not equal. Additionally, conservation of kinetic energy is guaranteed using velocity scaling where necessary. The unimolecular transformation and decomposition reactions are given a time based reaction probability $p$ per second:
+
+\begin{align*}
+    p = 1 - (1 - p')^{\frac{1}{\Delta t}} \Leftrightarrow p' = 1 - (1 - p)^{\Delta t},
+\end{align*}
+
+where $\Delta t$ is the reaction time step and $p'$ is the probability of the reaction to occur at each discrete reaction step. For example, if $p = 0.5$, $50\%$ of the educt will have reacted on average after one second. The bimolecular combination and exchange reactions have collision-based reaction probabilities $p$. For example, if $p = 0.5$, each collision of the educts has a $50\%$ probability to result in a reaction. If a set of educts has multiple reactions assigned to it, all reactions are tried sequentially in random order at each simulation time step or collision.
+
+Each reaction can be represented as a set $\{\text{Educts}, \text{Products}, p\}$. The set of all reaction is called $\Omega$.
+
+\subsubsection*{Most probable speed}
+The velocity components of the discs are each sampled from a Gaussian distribution:
+
+\begin{equation*}
+    v_x, v_y \sim \mathcal{N}(0, \sigma^2).
+\end{equation*}
+
+The standard deviation is calculated using the user-defined most probable speed $v_{\text{mp}}$ and the mass $m$ of the disc:
+
+\begin{equation*}
+    \sigma = \frac{v_{\text{mp}}}{m}.
+\end{equation*}
+
+\subsubsection*{Time step}
+The time step $\Delta t$ controls the accuracy of the simulation. After each simulation step, every disc is moved by $\Delta \vec{r} = \vec{v}\Delta t$. Smaller $\Delta t$ values make the simulation more accurate but are more CPU intensive. In this project, $\Delta t = 3\text{ms}$ for all simulations.
+
+\subsubsection*{The configuration}
+With the above notation, each simulation config can be written as a tuple
+
+\begin{equation*}
+    (D, R, N, f, \Omega, v_{\text{mp}}, \Delta t).
+\end{equation*}
+
+Since this project focusses on reaction networks, $R$, $N$, $v_\text{mp}$, $\Delta t$ and the simulation duration remained constant across all simulations to reduce the parameter space.
+
+\subsection{An example reaction}
+Inspired by water distribution networks, the target reaction that drove dataset creation and model evaluation is the formation of hydrogen carbonate in water:
+
+\begin{equation*}
+    Hydrogen carbonate formation here
+\end{equation*}
+
+- Classic approaches like a fixed MLP has disadvantages (fixed input size -> padding or too small, input permutation leads to different representations)
+- Graph neural networks are promising (represent reactions as graphs with variable input/output nodes -> no fixed input size, message passing for multiple educts, permutations don't matter)
+- A GNN will be trained on simulation data
+- Introduction to the simulation
+- Goal: Train multipurpose model, see if it can predict complicated water reaction network
 
 \section{Related work}
+- Briefly mention 1 or 2 papers that use GNNs to predict reaction network dynamics and introduce GNNs
+- Mention message passing and MLPs for flux prediction if papers exist
 
 \section{Methodology}
+\subsection{Datasets}
+\subsection{Model topology}
+Since reaction networks can be naturally represented as graphs, a model suitable to operate on graphs as input was developed. Such models are called graph neural networks (GNNs). Reaction networks pose two distinct challenges. First, a general model should be able to deal with highly varying numbers of species and reactions. Second, homomorphic transformations of the network such as reordering of the species or changing $A+B\rightarrow C$ into $B+A\rightarrow C$ should naturally be supported. A MLP where each input node corresponds to a simulation parameter, for example, would thus not be suitable.
+
+- Dataset creation: Tricky. Should contain systems with 1, 2, 3 or all 4 reaction types, vary connectivity, masses, reaction probs, number of species (+ simulation size, velocity distribution, ...), graph visualization (bipartite vs direct)
+- GNN topology (educt mlp, flux mlp, flux prediction [multiply with rate or not], message passing)
+- training methods (torch\_geometric, mse loss, RAM issues)
 The main challenge in this project is that the model should support an arbitrary number of disc types and reactions. A fixed-size MLP, for example, would fail for two reasons:
 
 \begin{itemize}
@@ -113,10 +190,16 @@ Suppose the available amount for a reactant is $A$ and the model requests fluxes
 \end{align*}
 
 \section{Results}
+- mse loss of test dataset
+- plots of example systems 1000 averaged simulation runs vs model prediction [water system, prey-predator, ..., cool looking examples])
 
 \section{Discussion}
+- did the model manage to predict reaction dynamics of systems not included in the training data? how about things included in the training data?
+- compare single run vs mathematical expectation vs averaged simulation runs
+- elaborate on missing parameters and things to tweak (model hyperparameters)
 
 \section{Conclusion}
+- Did it work?
 
 \pagebreak
 
