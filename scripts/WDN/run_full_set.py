@@ -338,5 +338,4 @@ with open(CONFIG_DIR / "WDN/trans_comp.json") as f:
 output_dir = DATASETS_DIR / f"WDN/{SET_NAME}"
 
 if __name__ == "__main__":
-    # execute_tasks(tasks, cfg, output_dir)
-    pass
+    execute_tasks(tasks, cfg, output_dir)
