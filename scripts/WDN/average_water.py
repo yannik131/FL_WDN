@@ -14,7 +14,7 @@ def run_task(filename):
             str(get_binary_path()),
             f"--config={CONFIG_DIR / 'WDN/water.json'}",
             f"--out={OUTPUT_DIR / filename}",
-            "--duration=60",
+            "--duration=1000",
             "--storage-interval=0.003",
         ],
         stdout=subprocess.DEVNULL,

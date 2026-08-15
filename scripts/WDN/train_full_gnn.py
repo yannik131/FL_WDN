@@ -326,16 +326,23 @@ if __name__ == "__main__":
 
     model = load_model(device)
 
-    species = ["A", "B", "C", "D"]
-    initial_fractions = [1, 0, 0, 0]
+    species = ["H+", "H20", "Ca2+", "CO2g", "CO2aq", "CO32-", "HCO3-", "H2CO3", "CaCO3"]
+    initial_fractions = [0, 0.8, 0.1, 0.1, 0, 0, 0, 0, 0]
 
-    masses = [1, 1, 2, 2]
+    masses = [1, 18, 40,   44,  44,   60,   61,   62,   100]
+    #         H+ H20 Ca2+  CO2g CO2aq CO32- HCO3- H2CO3 CaCO3
+    #         0  1   2     3    4     5     6     7     8
     reactions = [
-        [[[0], [1]], 0.1],
-        [[[0, 1], [2]], 0.01],
-        [[[1], [0]], 0.02],
-        [[[2], [3]], 0.01],
-        [[[1, 1], [3]], 0.02]
+        [[[3], [4]], 0.05],
+        [[[4], [3]], 0.01],
+        [[[4, 1], [7]], 0.02],
+        [[[7], [4, 1]], 0.2],
+        [[[7], [0, 6]], 0.865],
+        [[[0, 6], [7]], 0.12],
+        [[[6], [0, 5]], 0.03],
+        [[[0, 5], [6]], 0.3],
+        [[[8], [2, 5]], 0.002],
+        [[[2, 5], [8]], 0.015],
     ]
 
     trajectory = predict_trajectory(
@@ -343,13 +350,15 @@ if __name__ == "__main__":
         initial_species_values=initial_fractions,
         masses=masses,
         reactions=reactions,
-        steps=1200,
+        steps=120000,
         dt=0.05,
         device=device,
     )
     trajectory = np.array(trajectory)
 
     for i, name in enumerate(species):
+        if name not in ['Ca2+', 'CO32-', 'CaCO3']:
+            continue
         plt.plot(trajectory[:, 0], trajectory[:, i+1], label=name)
     plt.xlabel("Time")
     plt.ylabel("Count")
