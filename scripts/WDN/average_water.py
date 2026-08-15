@@ -54,3 +54,6 @@ def save_average_trajectory():
     df = pd.concat(dfs, ignore_index=True)
     average = df.groupby("ElapsedTime[s]").mean(numeric_only=True)
     average.to_csv(RESULTS_DIR / "WDN/water_averaged_df.csv")
+
+if __name__ == '__main__':
+    save_average_trajectory()

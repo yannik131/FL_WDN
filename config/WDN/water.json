@@ -1,0 +1,207 @@
+{
+  "config": {
+    "cellMembraneType": {
+      "discCount": 10000,
+      "discTypeDistribution": {
+        "CO\u2082 (g)": 0.1,
+        "Ca\u00b2\u207a": 0.1,
+        "H\u2082O": 0.8
+      },
+      "name": "Cell membrane",
+      "permeabilityMap": {},
+      "radius": 500.0
+    },
+    "discTypes": [
+      {
+        "mass": 1.0,
+        "name": "H\u207a",
+        "radius": 1.0
+      },
+      {
+        "mass": 18.0,
+        "name": "H\u2082O",
+        "radius": 4.242640687119285
+      },
+      {
+        "mass": 40.0,
+        "name": "Ca\u00b2\u207a",
+        "radius": 6.324555320336759
+      },
+      {
+        "mass": 44.0,
+        "name": "CO\u2082 (g)",
+        "radius": 6.6332495807108
+      },
+      {
+        "mass": 44.0,
+        "name": "CO\u2082 (aq)",
+        "radius": 6.6332495807108
+      },
+      {
+        "mass": 60.0,
+        "name": "CO\u2083\u00b2\u207b",
+        "radius": 7.745966692414834
+      },
+      {
+        "mass": 61.0,
+        "name": "HCO\u2083\u207b",
+        "radius": 7.810249675906654
+      },
+      {
+        "mass": 62.0,
+        "name": "H\u2082CO\u2083",
+        "radius": 7.874007874011811
+      },
+      {
+        "mass": 100.0,
+        "name": "CaCO\u2083 (s)",
+        "radius": 10.0
+      }
+    ],
+    "discs": [],
+    "membraneTypes": [],
+    "membranes": [],
+    "mostProbableSpeed": 200.0,
+    "reactions": [
+      {
+        "educt1": "CO\u2082 (g)",
+        "educt2": "",
+        "probability": 0.05,
+        "product1": "CO\u2082 (aq)",
+        "product2": ""
+      },
+      {
+        "educt1": "CO\u2082 (aq)",
+        "educt2": "",
+        "probability": 0.01,
+        "product1": "CO\u2082 (g)",
+        "product2": ""
+      },
+      {
+        "educt1": "CO\u2082 (aq)",
+        "educt2": "H\u2082O",
+        "probability": 0.02,
+        "product1": "H\u2082CO\u2083",
+        "product2": ""
+      },
+      {
+        "educt1": "H\u2082CO\u2083",
+        "educt2": "",
+        "probability": 0.2,
+        "product1": "CO\u2082 (aq)",
+        "product2": "H\u2082O"
+      },
+      {
+        "educt1": "H\u2082CO\u2083",
+        "educt2": "",
+        "probability": 0.865,
+        "product1": "H\u207a",
+        "product2": "HCO\u2083\u207b"
+      },
+      {
+        "educt1": "H\u207a",
+        "educt2": "HCO\u2083\u207b",
+        "probability": 0.12,
+        "product1": "H\u2082CO\u2083",
+        "product2": ""
+      },
+      {
+        "educt1": "HCO\u2083\u207b",
+        "educt2": "",
+        "probability": 0.03,
+        "product1": "H\u207a",
+        "product2": "CO\u2083\u00b2\u207b"
+      },
+      {
+        "educt1": "H\u207a",
+        "educt2": "CO\u2083\u00b2\u207b",
+        "probability": 0.3,
+        "product1": "HCO\u2083\u207b",
+        "product2": ""
+      },
+      {
+        "educt1": "CaCO\u2083 (s)",
+        "educt2": "",
+        "probability": 0.002,
+        "product1": "Ca\u00b2\u207a",
+        "product2": "CO\u2083\u00b2\u207b"
+      },
+      {
+        "educt1": "Ca\u00b2\u207a",
+        "educt2": "CO\u2083\u00b2\u207b",
+        "probability": 0.015,
+        "product1": "CaCO\u2083 (s)",
+        "product2": ""
+      }
+    ],
+    "reactionsConserveArea": true,
+    "simulationTimeScale": 15.0,
+    "simulationTimeStep": 3000000,
+    "useDistribution": true
+  },
+  "configVersion": "1",
+  "discTypeColorMap": {
+    "CO\u2082 (aq)": [
+      255,
+      255,
+      0,
+      255
+    ],
+    "CO\u2082 (g)": [
+      0,
+      0,
+      128,
+      255
+    ],
+    "CO\u2083\u00b2\u207b": [
+      128,
+      0,
+      128,
+      255
+    ],
+    "CaCO\u2083 (s)": [
+      0,
+      0,
+      255,
+      255
+    ],
+    "Ca\u00b2\u207a": [
+      255,
+      165,
+      0,
+      255
+    ],
+    "HCO\u2083\u207b": [
+      0,
+      255,
+      0,
+      255
+    ],
+    "H\u207a": [
+      255,
+      0,
+      0,
+      255
+    ],
+    "H\u2082CO\u2083": [
+      255,
+      192,
+      203,
+      255
+    ],
+    "H\u2082O": [
+      0,
+      128,
+      128,
+      255
+    ]
+  },
+  "membraneTypeColorMap": {
+    "Cell membrane": [
+      255,
+      255,
+      0,
+      255
+    ]
+  }
+}
