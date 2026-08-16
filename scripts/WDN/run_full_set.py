@@ -15,6 +15,7 @@ from functools import reduce
 from operator import or_
 from scipy.stats import truncnorm
 from copy import deepcopy
+import pandas as pd
 
 N_MAX_SPECIES = 10
 N_RUNS = 2000
@@ -312,6 +313,7 @@ def generate_tasks():
                 for r in range(10):
                     t = deepcopy(task)
                     t.r = r
+                    t.filename = t.filename.replace('.csv', f"_{r}.csv")
                     tasks.append(deepcopy(t))
 
     return tasks
@@ -344,6 +346,18 @@ with open(CONFIG_DIR / "WDN/trans_comp.json") as f:
     cfg = json.load(f)
 
 output_dir = DATASETS_DIR / f"WDN/{SET_NAME}"
+output_dir_averaged = DATASETS_DIR / f"WDN/{SET_NAME}_averaged/"
+output_dir_averaged.mkdir(exist_ok=True)
 
 if __name__ == "__main__":
     execute_tasks(tasks, cfg, output_dir)
+    mapping = pd.read_csv(mapfile_path)
+    mapping['run'] = mapping['filename'].str.extract(r"^(\d+)_\d+\.csv")[0].astype(int)
+    for run, group in mapping.groupby('run'):
+        dfs = []
+        for filename in group['filename']:
+            df = pd.read_csv(output_dir / filename)
+            dfs.append(df)
+        combined = pd.concat(dfs, ignore_index=True)
+        averaged = combined.groupby('ElapsedTime[s]', as_index=False).mean(numeric_only=True)
+        averaged.to_csv(output_dir_averaged / f"run_{run:04d}.csv", index=False)
