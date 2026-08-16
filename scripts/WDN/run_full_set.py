@@ -345,19 +345,20 @@ with open(mapfile_path, "w", newline='') as f:
 with open(CONFIG_DIR / "WDN/trans_comp.json") as f:
     cfg = json.load(f)
 
-output_dir = DATASETS_DIR / f"WDN/{SET_NAME}"
-output_dir_averaged = DATASETS_DIR / f"WDN/{SET_NAME}_averaged/"
-output_dir_averaged.mkdir(exist_ok=True)
+output_dir_raw = DATASETS_DIR / f"WDN/{SET_NAME}_raw"
+output_dir_raw.mkdir(exist_ok=True)
+output_dir = DATASETS_DIR / f"WDN/{SET_NAME}/"
+output_dir.mkdir(exist_ok=True)
 
 if __name__ == "__main__":
-    execute_tasks(tasks, cfg, output_dir)
+    execute_tasks(tasks, cfg, output_dir_raw)
     mapping = pd.read_csv(mapfile_path)
     mapping['run'] = mapping['filename'].str.extract(r"^(\d+)_\d+\.csv")[0].astype(int)
     for run, group in mapping.groupby('run'):
         dfs = []
         for filename in group['filename']:
-            df = pd.read_csv(output_dir / filename)
+            df = pd.read_csv(output_dir_raw / filename)
             dfs.append(df)
         combined = pd.concat(dfs, ignore_index=True)
         averaged = combined.groupby('ElapsedTime[s]', as_index=False).mean(numeric_only=True)
-        averaged.to_csv(output_dir_averaged / f"run_{run:04d}.csv", index=False)
+        averaged.to_csv(output_dir / f"run_{run:04d}.csv", index=False)
