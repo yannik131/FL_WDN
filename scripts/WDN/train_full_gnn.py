@@ -22,7 +22,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-SET_NAME = 'full_set_3'
+SET_NAME = 'full_set_4'
 MODEL_PATH = RESULTS_DIR / f"WDN/{SET_NAME}.pt"
 TRAIN_DATASET_PATH = DATASETS_DIR / f"WDN/{SET_NAME}_train.pt"
 TEST_DATASET_PATH = DATASETS_DIR / f"WDN/{SET_NAME}_test.pt"
@@ -331,6 +331,7 @@ if __name__ == "__main__":
 
     if not MODEL_PATH.exists():
         train(device=device, epochs=5)
+        exit(0)
 
     model = load_model(device)
 
