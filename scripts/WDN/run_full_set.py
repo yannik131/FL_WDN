@@ -14,20 +14,22 @@ from enum import IntFlag
 from functools import reduce
 from operator import or_
 from scipy.stats import truncnorm
+from copy import deepcopy
 
 N_MAX_SPECIES = 10
 N_RUNS = 2000
-SET_NAME = 'full_set_3'
+SET_NAME = 'full_set_4'
 random.seed(42)
 np.random.seed(42)
 
 class TransCombTask(Task):
-    def __init__(self, species=None, masses=None, fractions=None, reactions=None, filename=None):
+    def __init__(self, species=None, masses=None, fractions=None, reactions=None, filename=None, r=None):
         self.species = species
         self.masses = masses
         self.fractions = fractions
         self.reactions = reactions
         self.filename = filename
+        self.r = r
 
     def _apply_to_cfg(self, cfg):
         cfg['config']['discTypes'] = [
@@ -55,6 +57,7 @@ class TransCombTask(Task):
                 'probability': reaction['p']
             })
 
+# AI generated plot code, just for visualization of graphs
 def plot_task(task: TransCombTask, path: Path):
     graph = nx.DiGraph()
     n_species, n_reactions = len(task.species), len(task.reactions)
@@ -305,7 +308,11 @@ def generate_tasks():
         for comb in valid_combinations:
             flag = reduce(or_, comb)
             for _ in range(count_for_each_combination):
-                tasks.append(generate_random_task(f"{len(tasks):04d}.csv", flag))
+                task = generate_random_task(f"{len(tasks):04d}.csv", flag)
+                for r in range(10):
+                    t = deepcopy(task)
+                    t.r = r
+                    tasks.append(deepcopy(t))
 
     return tasks
 
@@ -315,10 +322,10 @@ image_dir.mkdir(exist_ok=True)
 tasks = []
 with open(mapfile_path, "w", newline='') as f:
     writer = csv.writer(f)
-    writer.writerow(["filename", "species", "masses", "fractions", "reactions"])
+    writer.writerow(["filename", "species", "masses", "fractions", "reactions", "repetition"])
     tasks = generate_tasks()
     for task in tqdm(tasks):
-        plot_task(task, image_dir)
+        # plot_task(task, image_dir)
         rounded_fractions = iteround.saferound(task.fractions, 3)
         reactions = []
         for reaction in task.reactions:
@@ -330,6 +337,7 @@ with open(mapfile_path, "w", newline='') as f:
             json.dumps(task.masses),
             json.dumps(rounded_fractions),
             json.dumps(reactions),
+            task.r,
         ])
 
 with open(CONFIG_DIR / "WDN/trans_comp.json") as f:

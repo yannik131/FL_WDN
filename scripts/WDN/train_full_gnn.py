@@ -1,3 +1,4 @@
+print("Starting imports")
 import logging
 import json
 import matplotlib.pyplot as plt
@@ -10,6 +11,9 @@ from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 from util.paths import DATASETS_DIR, RESULTS_DIR
 from sklearn.model_selection import train_test_split
+from matplotlib.lines import Line2D
+from time import perf_counter_ns
+print("Done importing")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -306,6 +310,8 @@ def predict_trajectory(
     values = list(map(float, initial_species_values))
     trajectory = [(0.0, *values)]
 
+    print("Starting prediction")
+    start = perf_counter_ns()
     with torch.no_grad():
         for step in range(1, steps + 1):
             graph = create_graph(values, masses, reactions).to(device)
@@ -313,6 +319,8 @@ def predict_trajectory(
 
             values = pred.squeeze(-1).cpu().tolist()
             trajectory.append((step * dt, *values))
+    dt = (perf_counter_ns() - start) / 1e9
+    print(f"Prediction took {dt:.3g}s")
 
     return trajectory
 
@@ -326,7 +334,7 @@ if __name__ == "__main__":
 
     model = load_model(device)
 
-    species = ["H+", "H20", "Ca2+", "CO2g", "CO2aq", "CO32-", "HCO3-", "H2CO3", "CaCO3"]
+    species = ["H+", "H20", "Ca²⁺", "CO2g", "CO2aq", "CO₃²⁻", "HCO3-", "H2CO3", "CaCO₃ (s)"]
     initial_fractions = [0, 0.8, 0.1, 0.1, 0, 0, 0, 0, 0]
 
     masses = [1, 18, 40,   44,  44,   60,   61,   62,   100]
@@ -350,18 +358,30 @@ if __name__ == "__main__":
         initial_species_values=initial_fractions,
         masses=masses,
         reactions=reactions,
-        steps=120000,
+        steps=int(1000 / 0.05),
         dt=0.05,
         device=device,
     )
     trajectory = np.array(trajectory)
+    fig, ax = plt.subplots()
 
-    for i, name in enumerate(species):
-        if name not in ['Ca2+', 'CO32-', 'CaCO3']:
-            continue
-        plt.plot(trajectory[:, 0], trajectory[:, i+1], label=name)
+    colors = ['blue', 'red', 'green']
+    df = pd.read_csv(RESULTS_DIR / "WDN/water_averaged_df.csv")
+    df = resample_counts(df)
+
+    for color, name in zip(colors, ['Ca²⁺', 'CO₃²⁻', 'CaCO₃ (s)']):
+        i = species.index(name)
+        ax.plot(trajectory[:, 0], trajectory[:, i+1], linestyle="--", color=color)
+        ax.plot(trajectory[:, 0], df[name].to_numpy(), color=color, label=name)
+
+    handles, labels = ax.get_legend_handles_labels()
+    handles += [
+        Line2D([0], [0], color='black', linestyle='-', label='averaged'),
+        Line2D([0], [0], color='black', linestyle='--', label='predicted')
+    ]
+
     plt.xlabel("Time")
     plt.ylabel("Count")
-    plt.legend()
+    plt.legend(handles=handles)
     plt.tight_layout()
     plt.show()

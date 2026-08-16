@@ -56,14 +56,14 @@ def get_average_trajectory(A0, B0, p):
 
     return average.index.to_numpy(), average["A"].to_numpy(), average["B"].to_numpy()
 
-def get_analytical_trajectory(A0, B0, p):
+def get_analytical_trajectory(A0, B0, p, t_max=60):
     dt = 0.05
-    t = np.arange(0, 60 + dt, dt)
+    t = np.arange(0, t_max + dt, dt)
     B = B0 + A0 * (1 - (1 - p)**t)
     A = (A0 + B0) - B
 
-    return t, A, B 
-    
+    return t, A, B
+
 
 def create_graph(A, B, p):
     x = torch.tensor([
@@ -129,7 +129,7 @@ def plot_trajectory(t, A, B, ax, label_suffix, c, style):
     ax.plot(t, A, style, color=c, label=label_suffix)
     ax.plot(t, B, style, color=c)
 
-if __name__ == '__main__':
+def compare_predicted():
     A0 = 500
     B0 = 50
     p = 0.07
@@ -139,3 +139,62 @@ if __name__ == '__main__':
     plot_trajectory(*get_analytical_trajectory(A0, B0, p), ax, "analytical", "red", "-")
     plt.legend()
     plt.show()
+
+def plot_worst_simulation_run():
+    n = 2
+
+    A0 = 500
+    B0 = 50
+    p = 0.07
+    set_name = "transformation_reaction"
+
+    run_reaction_1000_times(A0, B0, p, set_name)
+
+    set_dir = DATASETS_DIR / f"WDN/{set_name}/"
+    files = sorted(set_dir.glob("*.csv"))
+
+    t_analytical, A_analytical, B_analytical = get_analytical_trajectory(A0, B0, p)
+
+    analytical_A = np.interp
+    results = []
+
+    for file in files:
+        df = pd.read_csv(file)
+
+        t = df["ElapsedTime[s]"].to_numpy()
+        A = df["A"].to_numpy()
+        B = df["B"].to_numpy()
+
+        A_ref = analytical_A(t, t_analytical, A_analytical)
+        B_ref = analytical_A(t, t_analytical, B_analytical)
+
+        mse = np.mean((B - B_ref) ** 2)
+        results.append((mse, file, df))
+
+    # Sort by MSE, highest first
+    results.sort(key=lambda x: x[0], reverse=True)
+
+    fig, ax = plt.subplots()
+
+    for mse, file, df in results[:n]:
+        ax.plot(
+            df["ElapsedTime[s]"],
+            df["B"],
+            "-",
+            label=f"{file.stem}, MSE={mse:.2f}",
+        )
+
+    ax.plot(
+        t_analytical,
+        B_analytical,
+        "-",
+        label="Analytical",
+    )
+
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Count")
+    ax.legend()
+    plt.show()
+
+if __name__ == '__main__':
+    plot_worst_simulation_run()
