@@ -6,7 +6,7 @@ import iteround
 import csv
 from tqdm import tqdm
 import pandas as pd
-from task_generation import generate_tasks
+from WDN.task_generation import generate_tasks
 from util.task import execute_tasks
 import re
 

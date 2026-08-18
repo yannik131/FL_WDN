@@ -1,7 +1,7 @@
 import torch 
 from torch_geometric.data import Data, Dataset
 from tqdm import tqdm 
-from resample_counts import resample_counts
+from WDN.resample_counts import resample_counts
 import json 
 import pandas as pd
 import numpy as np

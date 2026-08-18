@@ -1,13 +1,12 @@
 print("Starting imports")
 import logging
-from reaction_dataset import load_dataset
+from WDN.reaction_dataset import load_dataset, create_graph
 import torch
 import torch.nn as nn
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 from util.paths import RESULTS_DIR
 from time import perf_counter_ns
-from reaction_dataset import create_graph
 print("Done importing")
 
 logger = logging.getLogger('mylogger')

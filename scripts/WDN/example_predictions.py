@@ -1,12 +1,12 @@
-from reaction_gnn import predict_trajectory, train, load_model
+from WDN.reaction_gnn import predict_trajectory, train, load_model
 import numpy as np
 import matplotlib.pyplot as plt 
 import pandas as pd 
-from resample_counts import resample_counts
+from WDN.resample_counts import resample_counts
 from util.paths import RESULTS_DIR
 from matplotlib.lines import Line2D
 
-def water_example(model, device):
+def water_example(model, device="cpu"):
     species = ["H+", "H20", "Ca²⁺", "CO2g", "CO2aq", "CO₃²⁻", "HCO3-", "H2CO3", "CaCO₃ (s)"]
     initial_fractions = [0, 0.8, 0.1, 0.1, 0, 0, 0, 0, 0]
 
@@ -106,6 +106,6 @@ if __name__ == "__main__":
         train(set_name, device=device, epochs=5)
         exit(0)
 
-    model = load_model(device)
-    lv_example(model, device)
+    model = load_model(set_name)
+    water_example(model)
     

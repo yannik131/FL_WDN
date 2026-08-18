@@ -5,8 +5,7 @@ from enum import IntFlag
 from functools import reduce
 from operator import or_
 from scipy.stats import truncnorm
-from copy import deepcopy
-from trans_comb_task import TransCombTask
+from WDN.trans_comb_task import TransCombTask
 
 class ReactionType(IntFlag):
     transformation = 1 << 0
