@@ -5,6 +5,14 @@ import pandas as pd
 from WDN.resample_counts import resample_counts
 from util.paths import RESULTS_DIR
 from matplotlib.lines import Line2D
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger('mylogger')
 
 def water_example(model, device="cpu"):
     species = ["H+", "H20", "Ca²⁺", "CO2g", "CO2aq", "CO₃²⁻", "HCO3-", "H2CO3", "CaCO₃ (s)"]
