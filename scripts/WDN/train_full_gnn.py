@@ -22,7 +22,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-SET_NAME = 'full_set_4'
+SET_NAME = 'full_set_3'
 MODEL_PATH = RESULTS_DIR / f"WDN/{SET_NAME}.pt"
 TRAIN_DATASET_PATH = DATASETS_DIR / f"WDN/{SET_NAME}_train.pt"
 TEST_DATASET_PATH = DATASETS_DIR / f"WDN/{SET_NAME}_test.pt"
@@ -324,17 +324,7 @@ def predict_trajectory(
 
     return trajectory
 
-
-if __name__ == "__main__":
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Using device: {device}")
-
-    if not MODEL_PATH.exists():
-        train(device=device, epochs=5)
-        exit(0)
-
-    model = load_model(device)
-
+def water_example(model, device):
     species = ["H+", "H20", "Ca²⁺", "CO2g", "CO2aq", "CO₃²⁻", "HCO3-", "H2CO3", "CaCO₃ (s)"]
     initial_fractions = [0, 0.8, 0.1, 0.1, 0, 0, 0, 0, 0]
 
@@ -386,3 +376,52 @@ if __name__ == "__main__":
     plt.legend(handles=handles)
     plt.tight_layout()
     plt.show()
+
+def lv_example(model, devie):
+    species = ["Prey", "Predator", "Resource"]
+    initial_fractions = [0, 0, 1]
+
+    masses = [30,  30,      30]
+    #         Prey Predator Resource
+    #         0    1        2
+    reactions = [
+        [[[0, 1], [1, 1]], 0.5],
+        [[[0, 2], [0, 0]], 0.02],
+        [[[0], [2]], 0.05],
+        [[[1], [2]], 0.9],
+        [[[2], [0]], 0.01],
+        [[[2], [1]], 0.01]
+    ]
+
+    trajectory = predict_trajectory(
+        model=model,
+        initial_species_values=initial_fractions,
+        masses=masses,
+        reactions=reactions,
+        steps=int(120 / 0.05),
+        dt=0.05,
+        device=device,
+    )
+    trajectory = np.array(trajectory)
+
+    for name in species:
+        i = species.index(name)
+        plt.plot(trajectory[:, 0], trajectory[:, i+1], label=name)
+
+    plt.xlabel("Time")
+    plt.ylabel("Count")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+if __name__ == "__main__":
+    device = "cpu"
+    print(f"Using device: {device}")
+
+    if not MODEL_PATH.exists():
+        train(device=device, epochs=5)
+        exit(0)
+
+    model = load_model(device)
+    lv_example(model, device)
+    
