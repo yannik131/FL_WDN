@@ -8,6 +8,7 @@ from collections import deque
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 from util.paths import get_binary_path
+from copy import copy
 
 EXE = get_binary_path()
 
@@ -74,16 +75,26 @@ def create_mapfile(tasks, path, header_mapping=None):
 def _run_task(task, cfg, output_dir):
     return task.run(cfg, output_dir)
 
-def execute_tasks(tasks, cfg, output_dir):
+def execute_tasks(tasks, cfg, output_dir, repetitions=1):
     output_dir.mkdir(parents=True, exist_ok=True)
     workers = os.cpu_count()
     queue_size = workers * 2
     futures = deque()
+    total = len(tasks) * repetitions
     print(f"Number of workers: {workers}")
+
+    def task_iter():
+        for task in tasks:
+            for r in range(1, repetitions + 1):
+                task_copy = copy(task)
+                if repetitions > 1:
+                    filename = task.filename
+                    task_copy.filename = f"{filename.stem}_{r}{filename.suffix}"
+                yield task_copy
 
     with ProcessPoolExecutor(max_workers=workers) as pool, tqdm(total=len(tasks)) as pbar:
         try:
-            task_iter = iter(tasks)
+            task_iter = iter(task_iter())
             for _ in range(queue_size):
                 try:
                     task = next(task_iter)
