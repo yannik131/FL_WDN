@@ -105,7 +105,7 @@ def evaluate(model, loader, loss_fn, device):
     return total_loss / len(loader)
 
 def train(set_name, device="cpu", epochs=None):
-    train_dataset, test_dataset = load_dataset()
+    train_dataset, test_dataset = load_dataset(set_name)
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 
     model = ReactionGNN().to(device)

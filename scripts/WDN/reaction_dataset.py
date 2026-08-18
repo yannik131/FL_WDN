@@ -118,12 +118,14 @@ def load_dataset(set_name):
         test_dataset = torch.load(test_dataset_path, weights_only=False)
         logger.info(f"Done loading")
         return train_dataset, test_dataset
+    else:
+        logger.info("No dataset file found, creating dataset")
 
     mapping_file = DATASETS_DIR / f"WDN/{set_name}.csv"
     mapping = pd.read_csv(mapping_file)
     train_mapping, test_mapping = train_test_split(mapping, test_size=0.1, random_state=42, shuffle=True)
-    train_dataset = ReactionDataset(train_mapping)
-    test_dataset = ReactionDataset(test_mapping)
+    train_dataset = ReactionDataset(train_mapping, set_name)
+    test_dataset = ReactionDataset(test_mapping, set_name)
 
     logger.info(f"Saving dataset to {train_dataset_path}")
     torch.save(train_dataset, train_dataset_path)
