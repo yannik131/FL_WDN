@@ -59,7 +59,7 @@ def water_example(model, device="cpu"):
     plt.tight_layout()
     plt.show()
 
-def lv_example(model, devie):
+def lv_example(model, device="cpu"):
     species = ["Prey", "Predator", "Resource"]
     initial_fractions = [0, 0, 1]
 
@@ -98,14 +98,14 @@ def lv_example(model, devie):
 
 if __name__ == "__main__":
     device = "cpu" # used to prefer cuda, but turned out to be slower
-    set_name = "full_set_3"
+    set_name = "full_set_4"
     print(f"Using device: {device}")
     model_path = RESULTS_DIR / f"WDN/{set_name}.pt"
 
     if not model_path.exists():
-        train(set_name, device=device, epochs=5)
+        train(set_name, device=device, epochs=10)
         exit(0)
 
     model = load_model(set_name)
-    water_example(model)
+    lv_example(model)
     
