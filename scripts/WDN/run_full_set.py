@@ -318,11 +318,11 @@ def generate_tasks():
 
     return tasks
 
-mapfile_path = DATASETS_DIR / f"WDN/{SET_NAME}.csv"
+raw_mapfile_path = DATASETS_DIR / f"WDN/{SET_NAME}_raw.csv"
 image_dir = DATASETS_DIR / f"WDN/{SET_NAME}_figs/"
 image_dir.mkdir(exist_ok=True)
 tasks = []
-with open(mapfile_path, "w", newline='') as f:
+with open(raw_mapfile_path, "w", newline='') as f:
     writer = csv.writer(f)
     writer.writerow(["filename", "species", "masses", "fractions", "reactions", "repetition"])
     tasks = generate_tasks()
@@ -350,9 +350,11 @@ output_dir_raw.mkdir(exist_ok=True)
 output_dir = DATASETS_DIR / f"WDN/{SET_NAME}/"
 output_dir.mkdir(exist_ok=True)
 
+# I messed up: I added the repetition column but forgot that len(task) was used for the filename counter and forgot that the training script should operate on the averaged files without the _{r} file ending
+# I put the creation of the mapping file for the averaged files into stuff.ipynb
 if __name__ == "__main__":
-    execute_tasks(tasks, cfg, output_dir_raw)
-    mapping = pd.read_csv(mapfile_path)
+    # execute_tasks(tasks, cfg, output_dir_raw)
+    mapping = pd.read_csv(raw_mapfile_path)
     mapping['run'] = mapping['filename'].str.extract(r"^(\d+)_\d+\.csv")[0].astype(int)
     for run, group in mapping.groupby('run'):
         dfs = []
