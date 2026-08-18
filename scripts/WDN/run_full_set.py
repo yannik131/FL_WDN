@@ -8,6 +8,7 @@ from tqdm import tqdm
 import pandas as pd
 from task_generation import generate_tasks
 from util.task import execute_tasks
+import re
 
 random.seed(42)
 np.random.seed(42)
@@ -45,19 +46,31 @@ def run_tasks():
 
     output_dir_raw = DATASETS_DIR / f"WDN/{SET_NAME}_raw"
     output_dir_raw.mkdir(exist_ok=True)
-    output_dir = DATASETS_DIR / f"WDN/{SET_NAME}/"
-    output_dir.mkdir(exist_ok=True)
 
     tasks = generate_tasks(2000)
-
     execute_tasks(tasks, cfg, output_dir_raw, repetitions=10)
-    mapping = pd.read_csv(MAPFILE_PATH)
-    mapping['run'] = mapping['filename'].str.extract(r"^(\d+)_\d+\.csv")[0].astype(int)
-    for run, group in mapping.groupby('run'):
-        dfs = []
-        for filename in group['filename']:
-            df = pd.read_csv(output_dir_raw / filename)
-            dfs.append(df)
-        combined = pd.concat(dfs, ignore_index=True)
-        averaged = combined.groupby('ElapsedTime[s]', as_index=False).mean(numeric_only=True)
-        averaged.to_csv(output_dir / f"run_{run:04d}.csv", index=False)
+
+def average_outputs():
+    output_dir = DATASETS_DIR / f"WDN/{SET_NAME}/"
+    output_dir.mkdir(exist_ok=True, parents=True)
+    csvs = list(output_dir.glob('*.csv'))
+    groups = {}
+    for path in csvs:
+        match = re.match(r'(.+)_(\d+)\.csv$', path.name)
+        if not match:
+            raise RuntimeError(f"No match for file {path.name}")
+        base_name = match.group(1)
+        groups.setdefault(base_name, []).append(path)
+    for base_name, paths in groups.items():
+        dfs = [pd.read_csv(path) for path in paths]
+        if len(dfs) > 1:
+            combined = pd.concat(dfs, ignore_index=True)
+            averaged = combined.groupby('ElapsedTime[s]', as_index=False).mean(numeric_only=True)
+        else:
+            averaged = dfs[0]
+        averaged.to_csv(output_dir / f'{base_name}.csv', index=False)
+
+if __name__ == '__main__':
+    run_tasks()
+    average_outputs()
+    

@@ -15,6 +15,20 @@
 \usepackage[labelfont=bf]{caption}
 \usepackage{bbm}
 
+% General flow:
+% Show water reaction and why it's interesting to simulate
+% Show Cell and how it is similar to reactions
+% Show example plot of water trajectory (only Ca2+, CaCO3 and CO32-)
+% Show example reaction network plot for water with distribution
+% Explain the approach: Edge mlp, how it trains, how it predicts
+% Go into details: Rollouts, averaging, probability distribution, masss distribution, edge probabilities, max reaction count, ...
+% Select random test network                                                                                 <-- Do this now
+% Images: network graph, single run, averaged runs, prediction from singles, prediction from averaged runs   <-- Do this now
+% Show training loss change after averaging
+% Show final result: Water prediction
+% Discuss: Rollout window size, mlp size, mlp inputs, dataset size and quality, ram usage etc.
+% Conclusion: Prediction good? Future work: Include other parameters (simulation size, velocity distribution), make simulation more realistic (electrostatic forces)
+
 \bibliographystyle{vancouver}
 
 % #1: path to the image
