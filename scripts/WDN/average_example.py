@@ -28,7 +28,7 @@ def run_tasks():
     workers = os.cpu_count()
     futures = deque()
     print(f"Number of workers: {workers}")
-    N = 10
+    N = 1000
     if len(list(OUTPUT_DIR.glob('*.csv'))) == 10:
         return
 
