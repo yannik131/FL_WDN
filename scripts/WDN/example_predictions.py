@@ -14,6 +14,38 @@ logging.basicConfig(
 )
 logger = logging.getLogger('mylogger')
 
+def small_example(model, device="cpu"):
+    species = list("ABC")
+    initial_fractions = [1/3, 1/3, 1/3]
+    masses = [1, 1, 2]
+    reactions = [
+        [[[0], [1]], 0.2],
+        [[[2], [0, 1]], 0.15],
+        [[[0, 1], [2]], 0.05],
+        [[[1, 2], [0, 2]], 0.03],
+    ]
+    trajectory = predict_trajectory(
+        model=model,
+        initial_species_values=initial_fractions,
+        masses=masses,
+        reactions=reactions,
+        steps=int(60 / 0.05),
+        dt=0.05,
+        device=device,
+    )
+    trajectory = np.array(trajectory)
+
+    for i in range(len(species)):
+        name = species[i]
+        plt.plot(trajectory[:, 0], trajectory[:, i+1], label=name)
+
+
+    plt.xlabel("Time")
+    plt.ylabel("Count")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
 def water_example(model, device="cpu"):
     species = ["H⁺", "H₂O", "Ca²⁺", "CO₂ (g)", "CO₂ (aq)", "CO₃²⁻", "HCO₃⁻", "H₂CO₃", "CaCO₃ (s)"]
     initial_fractions = [0, 0.8, 0.1, 0.1, 0, 0, 0, 0, 0]
@@ -22,7 +54,7 @@ def water_example(model, device="cpu"):
     #         H+ H20 Ca2+  CO2g CO2aq CO32- HCO3- H2CO3 CaCO3
     #         0  1   2     3    4     5     6     7     8
     reactions = [
-        [[[3], [4]], 0.05],
+        [[[3, 1], [4, 1]], 0.005],
         [[[4], [3]], 0.01],
         [[[4, 1], [7]], 0.02],
         [[[7], [4, 1]], 0.2],
@@ -47,7 +79,7 @@ def water_example(model, device="cpu"):
     fig, ax = plt.subplots()
 
     colors = ['blue', 'red', 'green']
-    df = pd.read_csv(RESULTS_DIR / "WDN/water_averaged_df.csv")
+    df = pd.read_csv(RESULTS_DIR / "WDN/no_exchange_water_averaged_df.csv")
     df = resample_counts(df)
 
     for i in range(len(species)):
@@ -107,7 +139,7 @@ def lv_example(model, device="cpu"):
 
 if __name__ == "__main__":
     device = "cpu" # used to prefer cuda, but turned out to be slower
-    set_name = "full_set_4_5_epochs"
+    set_name = "full_set_3"
     print(f"Using device: {device}")
     model_path = RESULTS_DIR / f"WDN/{set_name}.pt"
 
@@ -116,4 +148,4 @@ if __name__ == "__main__":
         exit(0)
 
     model = load_model(set_name)
-    water_example(model)
+    small_example(model)

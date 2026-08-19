@@ -6,15 +6,16 @@ import subprocess
 from util.paths import get_binary_path, CONFIG_DIR, DATASETS_DIR, RESULTS_DIR
 import pandas as pd
 
-OUTPUT_DIR = DATASETS_DIR / "WDN/water_averaged/"
+example_name = "water"
+OUTPUT_DIR = DATASETS_DIR / f"WDN/{example_name}_averaged/"
 
 def run_task(filename):
     subprocess.run(
         [
             str(get_binary_path()),
-            f"--config={CONFIG_DIR / 'WDN/water.json'}",
+            f"--config={CONFIG_DIR / f'WDN/{example_name}.json'}",
             f"--out={OUTPUT_DIR / filename}",
-            "--duration=1000",
+            "--duration=200",
             "--storage-interval=0.003",
         ],
         stdout=subprocess.DEVNULL,
@@ -27,8 +28,8 @@ def run_tasks():
     workers = os.cpu_count()
     futures = deque()
     print(f"Number of workers: {workers}")
-    N = 1000
-    if len(list(OUTPUT_DIR.glob('*.csv'))) == 1000:
+    N = 10
+    if len(list(OUTPUT_DIR.glob('*.csv'))) == 10:
         return
 
     with ProcessPoolExecutor(max_workers=workers) as pool, tqdm(total=N) as pbar:
@@ -53,7 +54,7 @@ def save_average_trajectory():
     dfs = [pd.read_csv(file) for file in OUTPUT_DIR.glob("*.csv")]
     df = pd.concat(dfs, ignore_index=True)
     average = df.groupby("ElapsedTime[s]").mean(numeric_only=True)
-    average.to_csv(RESULTS_DIR / "WDN/water_averaged_df.csv")
+    average.to_csv(RESULTS_DIR / f"WDN/{example_name}_averaged_df.csv")
 
 if __name__ == '__main__':
     save_average_trajectory()

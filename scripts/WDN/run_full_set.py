@@ -23,7 +23,7 @@ def create_mapfile(plot=False):
     with open(MAPFILE_PATH, "w", newline='') as f:
         writer = csv.writer(f)
         writer.writerow(["filename", "species", "masses", "fractions", "reactions"])
-        tasks = generate_tasks()
+        tasks = generate_tasks(2000)
         for task in tqdm(tasks):
             if plot:
                 task.plot(IMAGE_DIR)
@@ -71,6 +71,7 @@ def average_outputs():
         averaged.to_csv(output_dir / f'{base_name}.csv', index=False)
 
 if __name__ == '__main__':
-    run_tasks()
-    average_outputs()
+    # run_tasks()
+    # average_outputs()
+    create_mapfile(plot=True)
     

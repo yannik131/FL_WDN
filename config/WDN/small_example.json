@@ -1,0 +1,113 @@
+{
+    "config": {
+        "cellMembraneType": {
+            "discCount": 10000,
+            "discTypeDistribution": {
+                "A": 0.3333333333333333,
+                "B": 0.3333333333333333,
+                "C": 0.3333333333333333
+            },
+            "name": "Cell membrane",
+            "permeabilityMap": {},
+            "radius": 500.0
+        },
+        "discTypes": [
+            {
+                "mass": 1.0,
+                "name": "A",
+                "radius": 1.0
+            },
+            {
+                "mass": 1.0,
+                "name": "B",
+                "radius": 1.0
+            },
+            {
+                "mass": 2.0,
+                "name": "C",
+                "radius": 1.4142135623730951
+            }
+        ],
+        "discs": [],
+        "membraneTypes": [
+            {
+                "discCount": 100,
+                "discTypeDistribution": {},
+                "name": "Bubble",
+                "permeabilityMap": {},
+                "radius": 60.0
+            }
+        ],
+        "membranes": [],
+        "mostProbableSpeed": 200.0,
+        "reactions": [
+            {
+                "educt1": "A",
+                "educt2": "",
+                "probability": 0.2,
+                "product1": "B",
+                "product2": ""
+            },
+            {
+                "educt1": "C",
+                "educt2": "",
+                "probability": 0.15,
+                "product1": "A",
+                "product2": "B"
+            },
+            {
+                "educt1": "A",
+                "educt2": "B",
+                "probability": 0.05,
+                "product1": "C",
+                "product2": ""
+            },
+            {
+                "educt1": "B",
+                "educt2": "C",
+                "probability": 0.03,
+                "product1": "A",
+                "product2": "C"
+            }
+        ],
+        "reactionsConserveArea": true,
+        "simulationTimeScale": 0.1,
+        "simulationTimeStep": 3000000,
+        "useDistribution": true
+    },
+    "configVersion": "1",
+    "discTypeColorMap": {
+        "A": [
+            255,
+            0,
+            0,
+            255
+        ],
+        "B": [
+            0,
+            128,
+            128,
+            255
+        ],
+        "C": [
+            255,
+            165,
+            0,
+            255
+        ]
+    },
+    "membraneTypeColorMap": {
+        "Bubble": [
+            0,
+            128,
+            128,
+            255
+        ],
+        "Cell membrane": [
+            255,
+            255,
+            0,
+            255
+        ]
+    }
+}

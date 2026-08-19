@@ -39,7 +39,7 @@ class TransCombTask(Task):
             })
 
     # AI generated plot code, just for visualization of graphs
-    def plot(self, output_dir: Path):
+    def plot(self, output_dir: Path, large=False, dpi=100, title=True):
         graph = nx.DiGraph()
         n_species, n_reactions = len(self.species), len(self.reactions)
 
@@ -68,11 +68,18 @@ class TransCombTask(Task):
             educts, products = reaction["indices"]
             node = f"reaction_{i}"
             color = plt.cm.hsv(i / max(n_reactions, 1))
-            equation = (
-                f"{' + '.join(self.species[j] for j in educts)}"
-                f" → {' + '.join(self.species[j] for j in products)}"
-                f"\np={reaction['p']:.2g}"
-            )
+            if large:
+                equation = (
+                    f"{' + '.join(self.species[j] for j in educts)}\n"
+                    f"→\n{' + '.join(self.species[j] for j in products)}\n"
+                    f"p={reaction['p']:.2g}"
+                )
+            else:
+                equation = (
+                    f"{' + '.join(self.species[j] for j in educts)}"
+                    f" → {' + '.join(self.species[j] for j in products)}"
+                    f"\np={reaction['p']:.2g}"
+                )
 
             graph.add_node(node, label=equation)
             pos[node] = (0, reaction_y[i])
@@ -114,12 +121,13 @@ class TransCombTask(Task):
         ]
 
         fig, ax = plt.subplots(figsize=(11, max(4, n_reactions * 1.5)))
+        factor = 2 if large else 1
 
         nx.draw_networkx_nodes(
             graph,
             pos,
             nodelist=species_nodes,
-            node_size=2000,
+            node_size=4000 if large else 2000,
             node_color="lightblue",
             ax=ax,
         )
@@ -127,10 +135,10 @@ class TransCombTask(Task):
             graph,
             pos,
             nodelist=reaction_nodes,
-            node_shape="s",
+            node_shape="H",
             node_color="white",
             edgecolors="black",
-            node_size=4000,
+            node_size=8000 if large else 6000,
             ax=ax,
         )
         nx.draw_networkx_edges(
@@ -149,14 +157,15 @@ class TransCombTask(Task):
         )
 
         # Must be set after NetworkX has performed its autoscaling.
-        y_padding = 0.35
+        y_padding = 0.35 * factor
         ax.set_ylim(y_min - y_padding, y_max + y_padding)
 
-        ax.set_title(self.filename)
+        if title:
+            ax.set_title(self.filename)
         ax.axis("off")
         fig.tight_layout()
         if output_dir is not None:
-            fig.savefig(output_dir / Path(self.filename).with_suffix(".jpg"), dpi=100)
+            fig.savefig(output_dir / Path(self.filename).with_suffix(".jpg"), dpi=dpi)
             plt.close(fig)
         else:
             plt.show()
