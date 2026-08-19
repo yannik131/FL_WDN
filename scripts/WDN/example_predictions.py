@@ -1,7 +1,7 @@
 from WDN.reaction_gnn import predict_trajectory, train, load_model
 import numpy as np
-import matplotlib.pyplot as plt 
-import pandas as pd 
+import matplotlib.pyplot as plt
+import pandas as pd
 from WDN.resample_counts import resample_counts
 from util.paths import RESULTS_DIR
 from matplotlib.lines import Line2D
@@ -15,7 +15,7 @@ logging.basicConfig(
 logger = logging.getLogger('mylogger')
 
 def water_example(model, device="cpu"):
-    species = ["H+", "H20", "Ca²⁺", "CO2g", "CO2aq", "CO₃²⁻", "HCO3-", "H2CO3", "CaCO₃ (s)"]
+    species = ["H⁺", "H₂O", "Ca²⁺", "CO₂ (g)", "CO₂ (aq)", "CO₃²⁻", "HCO₃⁻", "H₂CO₃", "CaCO₃ (s)"]
     initial_fractions = [0, 0.8, 0.1, 0.1, 0, 0, 0, 0, 0]
 
     masses = [1, 18, 40,   44,  44,   60,   61,   62,   100]
@@ -50,10 +50,11 @@ def water_example(model, device="cpu"):
     df = pd.read_csv(RESULTS_DIR / "WDN/water_averaged_df.csv")
     df = resample_counts(df)
 
-    for color, name in zip(colors, ['Ca²⁺', 'CO₃²⁻', 'CaCO₃ (s)']):
-        i = species.index(name)
+    for i in range(len(species)):
+        color = f"C{i}"
+        name = species[i]
         ax.plot(trajectory[:, 0], trajectory[:, i+1], linestyle="--", color=color)
-        ax.plot(trajectory[:, 0], df[name].to_numpy(), color=color, label=name)
+        ax.plot(trajectory[:, 0], df[name].to_numpy(), label=name, color=color)
 
     handles, labels = ax.get_legend_handles_labels()
     handles += [
@@ -106,7 +107,7 @@ def lv_example(model, device="cpu"):
 
 if __name__ == "__main__":
     device = "cpu" # used to prefer cuda, but turned out to be slower
-    set_name = "full_set_4"
+    set_name = "full_set_4_5_epochs"
     print(f"Using device: {device}")
     model_path = RESULTS_DIR / f"WDN/{set_name}.pt"
 
@@ -115,5 +116,4 @@ if __name__ == "__main__":
         exit(0)
 
     model = load_model(set_name)
-    lv_example(model)
-    
+    water_example(model)
