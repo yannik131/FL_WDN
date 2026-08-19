@@ -39,7 +39,7 @@ class TransCombTask(Task):
             })
 
     # AI generated plot code, just for visualization of graphs
-    def plot_task(self, output_dir: Path):
+    def plot(self, output_dir: Path):
         graph = nx.DiGraph()
         n_species, n_reactions = len(self.species), len(self.reactions)
 
@@ -155,5 +155,8 @@ class TransCombTask(Task):
         ax.set_title(self.filename)
         ax.axis("off")
         fig.tight_layout()
-        fig.savefig(output_dir / Path(self.filename).with_suffix(".jpg"), dpi=100)
-        plt.close(fig)
+        if output_dir is not None:
+            fig.savefig(output_dir / Path(self.filename).with_suffix(".jpg"), dpi=100)
+            plt.close(fig)
+        else:
+            plt.show()
