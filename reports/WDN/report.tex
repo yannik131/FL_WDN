@@ -207,7 +207,7 @@ Using the product $P$ of educt fractions was inspired by chemical kinetics, wher
 \subsection{Model training}
 When operating on a graph with multiple reactions, the above calculations for each step are done in parallel utilizing \path{torch.tensor} objects. During training, multiple graphs were batched together and indices were kept in sync with the help of the \path{data.Data} class from \path{torch_geometric}, a package specialized for working with GNNs. The loss was calculated using the mean squared error (MSE) of the prediction compared to the simulated trajectory. 
 
-In order to predict a trajectory, the model was repeatedly applied to the last predicted state, making it an autoregressive model. If the loss during training was calulcated using only a single prediction, the model would likely struggle to learn that small initial errors can accumulate to large drifts over time. To this end, a \textit{rollout window} of one second was used during training: All simulated trajectories were resampled to $\Delta t = \unit[50]{ms}$ and the model was applied 20 times to the last predicted state. Each graph contained both the current species fractions and the fractions for each of the next 20 time steps. The total loss used for optimization was the sum of all 20 losses for each prediction. Training used the Adam optimizer with a learning rate of $1 \times 10^{-3}$ and a batch size of $32$.
+In order to predict a trajectory, the model was repeatedly applied to the last predicted state, making it an autoregressive model. If the loss during training was calulcated using only a single prediction, the model would likely struggle to learn that small initial errors can accumulate to large drifts over time. To this end, a \textit{rollout window} of one second was used during training: All simulated trajectories were resampled to $\Delta t = \unit[50]{ms}$ and the model was applied 20 times to the last predicted state. Each graph contained both the current species fractions and the fractions for each of the next 20 time steps. The total loss used for optimization was the sum of all 20 losses for each prediction. Training used the Adam optimizer with a learning rate of $1 \times 10^{-3}$, a batch size of $32$ and five epochs. Each epoch took about one to two hours to complete. The dataset for training was divided with a 90/10 split for training and testing.
 
 \subsection{The datasets}
 The limiting factor for dataset creation turned out to be RAM usage. A dataset containing aobut 2,000 CSV files of simulated trajectories already used about $\unit[50]{GB}$ of RAM even after resampling to $\Delta t = \unit[50]{ms}$. Since a linux server with about $\unit[8]{GB}$ of RAM and four $\unit[2.4]{GHz}$ processors was used for training, dataset creation using \path{torch_geometric} was done using a \unit[100]{GB} SWAP file and took about \unit[12]{h}. 
@@ -228,19 +228,18 @@ The initial fractions where randomly drawn from a Dirichlet distribution with $\
 
 Two datasets were created using the same set of graphs: For the first, each simulation was run once, and for the second, the average trajectory of 10 runs was calculated.
 
-\subsubsection{Scaling the requested flux}
-Suppose the available amount for a reactant is $A$ and the model requests fluxes $F_1,\ddots,F_n$. The reactions can't consume more $A$ than available. The simplest solution is to scale all $F_i$ with a common scaling factor $s$:
-
-\begin{align*}
-    &\sum_i F_i \overset{!}{\le} A\\
-    &\Rightarrow s\sum_i F_i \le A \Leftrightarrow s = \frac{A}{\sum_i F_i}\\
-    &\Rightarrow \text{scale} = \min\left(1, \frac{A}{\sum_i F_i}\right).
-\end{align*}
-
 \section{Results}
-- mse loss of test dataset
-- plots of example systems 1000 averaged simulation runs vs model prediction [water system, prey-predator, ..., cool looking examples from the test dataset])
-- show single simulation run vs 1000 averaged vs model prediction vs theoretical expectation for single transformation reaction
+The target reaction network from \cref{fig_water_network_reaction_graph} has many disc types, but the formation of $\ce{CaCO3}$ is the most relevant aspect. Its predicted fraction and the fraction of some other educts alongside the simulation runs is shown in \cref{fig_water_prediction}.
+
+\insertfigure{figures/water_prediction.jpg}{Prediction of $\ce{CaCO3}$ fractions over time using the model trained on single simulation runs to the left and using the model trained on averaged simulation runs to the right. The mean squared error (MSE) was calculated with the averaged simulation run as a comparison. The simulated run on the left was randomly chosen, the one on the right is the average of 10 runs}{fig_water_prediction}
+
+Both models were able to predict the overall dynamic of the system up to a constant offset. For the simple network seen in \cref{fig_simple_network_graph}, the predictions alongside simulation runs are shown in \cref{fig_simple_prediction}.
+
+\insertfigure{figures/simple_prediction.jpg}{Prediction of the simple network from \cref{fig_simple_network_graph} with the model trained on single simulation runs to the left and the model trained on averaged runs to the right. The MSE was calulcated with the averaged runs as a reference. The left figure shows a single simulation run as comparison, the right the average of 10 runs.}{fig_simple_prediction}
+
+For this simple network, the model failed to predict the dynamic of the trajectories. 
+
+The evaluation loss on the testing dataset of averaged runs was $1,47\cdot 10^{-4}$ for the model trained on single runs and $1,49\cdot 10^{-4}$ for the model trained on averaged runs. The model trained on averaged runs was also trained for 10 and 50 epochs as a comparison. The testing losses were $1,74\cdot 10^{-4}$ and ..., respectively. 
 
 \section{Discussion}
 - did the model manage to predict reaction dynamics of systems not included in the training data? how about things included in the training data?
