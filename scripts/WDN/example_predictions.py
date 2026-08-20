@@ -139,7 +139,7 @@ def lv_example(model, device="cpu"):
 
 if __name__ == "__main__":
     device = "cpu" # used to prefer cuda, but turned out to be slower
-    set_name = "full_set_3"
+    set_name = "full_set_4"
     print(f"Using device: {device}")
     model_path = RESULTS_DIR / f"WDN/{set_name}.pt"
 
