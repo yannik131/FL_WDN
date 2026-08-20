@@ -47,7 +47,7 @@ def small_example(model, device="cpu"):
     plt.show()
 
 def water_example(model, device="cpu"):
-    species = ["H⁺", "H₂O", "Ca²⁺", "CO₂ (g)", "CO₂ (aq)", "CO₃²⁻", "HCO₃⁻", "H₂CO₃", "CaCO₃ (s)"]
+    species = ["H⁺", "H₂O", "Ca²⁺", "CO₂ (g)", "CO₂ (aq)", "CO₃²⁻", "HCO₃⁻", "H₂CO₃", "CaCO₃"]
     initial_fractions = [0, 0.8, 0.1, 0.1, 0, 0, 0, 0, 0]
 
     masses = [1, 18, 40,   44,  44,   60,   61,   62,   100]
@@ -71,7 +71,7 @@ def water_example(model, device="cpu"):
         initial_species_values=initial_fractions,
         masses=masses,
         reactions=reactions,
-        steps=int(1000 / 0.05),
+        steps=int(200 / 0.05),
         dt=0.05,
         device=device,
     )
@@ -79,8 +79,8 @@ def water_example(model, device="cpu"):
     fig, ax = plt.subplots()
 
     colors = ['blue', 'red', 'green']
-    df = pd.read_csv(RESULTS_DIR / "WDN/no_exchange_water_averaged_df.csv")
-    df = resample_counts(df)
+    df = pd.read_csv(RESULTS_DIR / "WDN/water_averaged_df.csv")
+    df = resample_counts(df, t_max=200)
 
     for i in range(len(species)):
         color = f"C{i}"
@@ -144,8 +144,8 @@ if __name__ == "__main__":
     model_path = RESULTS_DIR / f"WDN/{set_name}.pt"
 
     if not model_path.exists():
-        train(set_name, device=device, epochs=10)
+        train(set_name, device=device, epochs=50)
         exit(0)
 
     model = load_model(set_name)
-    small_example(model)
+    water_example(model)

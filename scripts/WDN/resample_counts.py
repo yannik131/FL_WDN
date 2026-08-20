@@ -1,10 +1,12 @@
 import numpy as np
 import pandas as pd
 
-def resample_counts(df: pd.DataFrame, dt=0.05):
+def resample_counts(df: pd.DataFrame, dt=0.05, t_max=None):
     time_col = "ElapsedTime[s]"
     x = df[time_col].to_numpy()
-    new_time = np.arange(x.min(), x.max() + dt, dt)
+    if t_max is None:
+        t_max = x.max()
+    new_time = np.arange(x.min(), t_max + dt, dt)
     count_cols = df.columns.drop(time_col)
 
     df_interp = pd.DataFrame({time_col: new_time})

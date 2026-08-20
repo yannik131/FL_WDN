@@ -48,9 +48,6 @@ def generate_random_task(filename, allowed_reaction_types, max_species=10):
         multipliers.append(parent_multiplier + 1)
     random.shuffle(multipliers)
     masses = [quantum * multiplier for multiplier in multipliers]
-    # if not all entries are equal, all reactions are possible
-    if len(set(masses)) == 1:
-        masses[0] = min(100, masses[0] + quantum)
 
     # with n species, there are ~ n^2 transformations, ~ n^3 combinations/decompositions
     # and ~ n^4 exchanges possible (very rough, small factors because of mass constraints)

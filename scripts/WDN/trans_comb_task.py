@@ -64,10 +64,11 @@ class TransCombTask(Task):
                 graph.add_node(node, label=f"{species}: {self.masses[i]}", mass=self.masses[i])
                 pos[node] = (x, species_y[i])
 
+        colors = plt.cm.tab20(np.linspace(0, 1, min(n_reactions, 20)))
         for i, reaction in enumerate(self.reactions):
             educts, products = reaction["indices"]
             node = f"reaction_{i}"
-            color = plt.cm.hsv(i / max(n_reactions, 1))
+            color = colors[i % len(colors)]
             if large:
                 equation = (
                     f"{' + '.join(self.species[j] for j in educts)}\n"
@@ -153,6 +154,7 @@ class TransCombTask(Task):
             pos,
             labels={node: data["label"] for node, data in graph.nodes(data=True)},
             font_size=8,
+            font_weight="bold",
             ax=ax,
         )
 
