@@ -144,7 +144,7 @@ if __name__ == "__main__":
     model_path = RESULTS_DIR / f"WDN/{set_name}.pt"
 
     if not model_path.exists():
-        train(set_name, device=device, epochs=50)
+        train(set_name, device=device, epochs=20)
         exit(0)
 
     model = load_model(set_name)
