@@ -118,7 +118,7 @@ def train(set_name, device="cpu", epochs=None):
         model.train()
         total_loss = 0.0
 
-        for batch in tqdm(train_loader, leave=False):
+        for batch in tqdm(train_loader, dynamic_ncols=True, smoothing=0):
             batch = batch.to(device)
             optimizer.zero_grad()
 
