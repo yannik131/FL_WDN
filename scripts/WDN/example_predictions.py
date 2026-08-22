@@ -1,3 +1,4 @@
+# Predict trajectories of some test configs with the model
 from WDN.reaction_gnn import predict_trajectory, train, load_model
 import numpy as np
 import matplotlib.pyplot as plt
