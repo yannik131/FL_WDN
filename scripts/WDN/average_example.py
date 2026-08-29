@@ -1,3 +1,4 @@
+# Runs a simulation N times and creates an averaged df
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from collections import deque
@@ -6,7 +7,7 @@ import subprocess
 from util.paths import get_binary_path, CONFIG_DIR, DATASETS_DIR, RESULTS_DIR
 import pandas as pd
 
-example_name = "small_example_different"
+example_name = "small_example"
 OUTPUT_DIR = DATASETS_DIR / f"WDN/{example_name}_averaged/"
 
 def run_task(filename):

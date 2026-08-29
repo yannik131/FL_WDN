@@ -1,13 +1,14 @@
+# Calculate test losses for the model
 import torch
 import torch.nn as nn
 from torch_geometric.loader import DataLoader
 from util.paths import RESULTS_DIR, DATASETS_DIR
 from WDN.reaction_gnn import ReactionGNN, evaluate
 
-print("Loading model")
+print("Loading test dataset")
 test_dataset = torch.load(DATASETS_DIR / f"WDN/full_set_4_test.pt", weights_only=False)
 print("Done loading")
-for model_name in ["full_set_3", "full_set_4_5_epochs", "full_set_4_10_epochs"]:
+for model_name in ["full_set_4"]:
     print(f"Calculating loss for model: {model_name}")
     model = ReactionGNN().to("cpu")
     loss_fn = nn.MSELoss()
